@@ -55,7 +55,7 @@ def test_illustration_generator_init_mps(mock_cuda, mock_mps, mock_from_pretrain
     assert gen.device == "mps"
 
 
-def test_generator_uses_identical_settings_on_cpu_and_cuda():
+def test_generator_uses_identical_settings_on_cpu_cuda_and_mps():
     from unittest.mock import MagicMock, patch
 
     from pageloom.generator import IllustrationGenerator
@@ -77,12 +77,38 @@ def test_generator_uses_identical_settings_on_cpu_and_cuda():
         # CUDA path
         with patch("pageloom.generator.torch.cuda.is_available", return_value=True):
             gen_cuda = IllustrationGenerator()
+        # MPS path
+        with (
+            patch("pageloom.generator.torch.cuda.is_available", return_value=False),
+            patch("pageloom.generator.torch.backends.mps.is_available", return_value=True),
+        ):
+            gen_mps = IllustrationGenerator()
 
-    # Both should use float32 (no behavioral difference)
-    assert gen_cpu.torch_dtype == gen_cuda.torch_dtype
-    assert str(gen_cpu.torch_dtype) == str(gen_cuda.torch_dtype)
-    # Attention slicing should be enabled consistently (same call count pattern)
-    # The code now applies it unconditionally, so both paths call it once.
+    # All three should use float32 (no behavioral difference)
+    assert gen_cpu.torch_dtype == gen_cuda.torch_dtype == gen_mps.torch_dtype
+    assert str(gen_cpu.torch_dtype) == str(gen_cuda.torch_dtype) == str(gen_mps.torch_dtype)
+    # Attention slicing should be enabled consistently
+    assert mock_pipeline.enable_attention_slicing.call_count == 3
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=True)
+def test_illustration_generator_generate_mps(mock_mps, mock_cuda, mock_from_pretrained):
+    from PIL import Image
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_image = Image.new("RGB", (512, 512), color="red")
+    mock_pipeline.return_value = MagicMock(images=[mock_image])
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    gen = IllustrationGenerator()
+    assert gen.device == "mps"
+    result = gen.generate("a happy cat")
+    assert isinstance(result, Image.Image)
+    assert result.size == (512, 512)
 
 
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
