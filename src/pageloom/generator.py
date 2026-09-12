@@ -24,15 +24,14 @@ class IllustrationGenerator:
             else:
                 device = "cpu"
         self.device = device
-        self.torch_dtype = torch_dtype or (torch.float16 if device == "cuda" else torch.float32)
+        self.torch_dtype = torch_dtype or torch.float32
         self.pipeline = StableDiffusionPipeline.from_pretrained(
             model_id,
             torch_dtype=self.torch_dtype,
         )
         self.pipeline = self.pipeline.to(self.device)
-        # Enable attention slicing for lower memory usage
-        if device == "cpu":
-            self.pipeline.enable_attention_slicing()
+        # Attention slicing enabled consistently for lower memory usage
+        self.pipeline.enable_attention_slicing()
 
     def generate(
         self,
