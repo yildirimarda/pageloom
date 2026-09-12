@@ -10,7 +10,7 @@
 - [x] Implement Stable Diffusion illustration generator using Hugging Face diffusers library directly in Python
 - [x] Create style-prompt template builder that takes an example page description and produces a consistent prompt
 - [x] Add Pillow-based text overlay layer for letter and word rendering on generated illustrations
-- [ ] Build print-ready PDF compiler that combines pages into a single KDP-sized PDF
+- [x] Build print-ready PDF compiler that combines pages into a single KDP-sized PDF
 
 ## Milestone 3: Style consistency and pipeline portability
 - [ ] Implement visual-style extractor that analyzes an example page for color palette, typography, and composition rules
