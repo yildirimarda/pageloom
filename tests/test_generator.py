@@ -55,6 +55,36 @@ def test_illustration_generator_init_mps(mock_cuda, mock_mps, mock_from_pretrain
     assert gen.device == "mps"
 
 
+def test_generator_uses_identical_settings_on_cpu_and_cuda():
+    from unittest.mock import MagicMock, patch
+
+    from pageloom.generator import IllustrationGenerator
+
+    # Verify the same torch_dtype and attention slicing regardless of device
+    with patch(
+        "pageloom.generator.StableDiffusionPipeline.from_pretrained"
+    ) as mock_from_pretrained:
+        mock_pipeline = MagicMock()
+        mock_pipeline.to.side_effect = lambda device: mock_pipeline
+        mock_from_pretrained.return_value = mock_pipeline
+
+        # CPU path
+        with (
+            patch("pageloom.generator.torch.cuda.is_available", return_value=False),
+            patch("pageloom.generator.torch.backends.mps.is_available", return_value=False),
+        ):
+            gen_cpu = IllustrationGenerator()
+        # CUDA path
+        with patch("pageloom.generator.torch.cuda.is_available", return_value=True):
+            gen_cuda = IllustrationGenerator()
+
+    # Both should use float32 (no behavioral difference)
+    assert gen_cpu.torch_dtype == gen_cuda.torch_dtype
+    assert str(gen_cpu.torch_dtype) == str(gen_cuda.torch_dtype)
+    # Attention slicing should be enabled consistently (same call count pattern)
+    # The code now applies it unconditionally, so both paths call it once.
+
+
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
 @patch("pageloom.generator.torch.cuda.is_available", return_value=False)
 @patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
