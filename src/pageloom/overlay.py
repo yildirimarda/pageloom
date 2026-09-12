@@ -61,13 +61,25 @@ class TextOverlay:
         self,
         image: Image.Image,
         text: str = "",
+        page_format: str = "standard",
     ) -> Image.Image:
         overlay_image = image.copy()
         draw = ImageDraw.Draw(overlay_image)
 
         if text:
             font = self._get_font(self.text_size)
-            x, y = self.text_position
-            draw.text((x, y), text, fill=self.text_color, font=font)
+            if page_format == "object_name":
+                # Center the object name prominently near the bottom
+                x = (image.width - 100) // 2
+                y = image.height - int(image.height * 0.15)
+                draw.text((x, y), text, fill=self.text_color, font=font)
+            elif page_format == "themed_scene":
+                # Smaller label centered horizontally near the bottom
+                x = (image.width - 150) // 2
+                y = image.height - int(image.height * 0.1)
+                draw.text((x, y), text, fill=self.text_color, font=font)
+            else:
+                x, y = self.text_position
+                draw.text((x, y), text, fill=self.text_color, font=font)
 
         return overlay_image

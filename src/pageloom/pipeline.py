@@ -36,12 +36,15 @@ class Pipeline:
         contents: list[str],
         themes: list[str] | None = None,
         output_path: str | Path = "output.pdf",
+        page_format: str = "standard",
     ) -> Path:
         """Generate matching pages for each content item and compile to PDF."""
         themes = themes or [""] * len(contents)
         pages: list[Image.Image] = []
         for content, theme in zip(contents, themes):
-            prompt = self.prompt_builder.build(content=content, theme=theme)
+            prompt = self.prompt_builder.build(
+                content=content, theme=theme, page_format=page_format
+            )
             width = self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
             height = self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
             image = self.generator.generate(
@@ -49,6 +52,6 @@ class Pipeline:
                 width=int(width),
                 height=int(height),
             )
-            overlaid = self.overlay.apply(image, text=content)
+            overlaid = self.overlay.apply(image, text=content, page_format=page_format)
             pages.append(overlaid)
         return self.compiler.compile(pages, output_path)
