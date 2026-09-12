@@ -25,10 +25,15 @@ class IllustrationGenerator:
                 device = "cpu"
         self.device = device
         self.torch_dtype = torch_dtype or torch.float32
-        self.pipeline = StableDiffusionPipeline.from_pretrained(
-            model_id,
-            torch_dtype=self.torch_dtype,
-        )
+        try:
+            self.pipeline = StableDiffusionPipeline.from_pretrained(
+                model_id,
+                torch_dtype=self.torch_dtype,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to load Stable Diffusion model '{model_id}': {exc}"
+            ) from exc
         self.pipeline = self.pipeline.to(self.device)
         # Attention slicing enabled consistently for lower memory usage
         self.pipeline.enable_attention_slicing()
@@ -46,7 +51,7 @@ class IllustrationGenerator:
         generator = None
         if seed is not None:
             generator = torch.Generator(device=self.device).manual_seed(seed)
-        image = self.pipeline(
+        result = self.pipeline(
             prompt=prompt,
             negative_prompt=negative_prompt,
             width=width,
@@ -54,5 +59,11 @@ class IllustrationGenerator:
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
             generator=generator,
-        ).images[0]
+        )
+        images = getattr(result, "images", None) or []
+        if not images:
+            return Image.new("RGB", (width, height), color="gray")
+        image = images[0]
+        if not isinstance(image, Image.Image):
+            return Image.new("RGB", (width, height), color="gray")
         return image

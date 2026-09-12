@@ -128,3 +128,57 @@ def test_illustration_generator_generate(mock_cuda, mock_mps, mock_from_pretrain
     result = gen.generate("a happy cat")
     assert isinstance(result, Image.Image)
     assert result.size == (512, 512)
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_illustration_generator_generate_empty_images(mock_cuda, mock_mps, mock_from_pretrained):
+    from PIL import Image
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_pipeline.return_value = MagicMock(images=[])
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    gen = IllustrationGenerator()
+    result = gen.generate("a happy cat", width=256, height=128)
+    assert isinstance(result, Image.Image)
+    assert result.size == (256, 128)
+    assert result.getpixel((0, 0)) == (128, 128, 128)
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_illustration_generator_generate_no_images_attr(mock_cuda, mock_mps, mock_from_pretrained):
+    from PIL import Image
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_result = MagicMock()
+    del mock_result.images
+    mock_pipeline.return_value = mock_result
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    gen = IllustrationGenerator()
+    result = gen.generate("a happy cat", width=128, height=64)
+    assert isinstance(result, Image.Image)
+    assert result.size == (128, 64)
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_illustration_generator_init_model_load_failure(mock_mps, mock_cuda, mock_from_pretrained):
+    mock_from_pretrained.side_effect = RuntimeError("model not found")
+    from pageloom.generator import IllustrationGenerator
+
+    try:
+        IllustrationGenerator()
+        assert False, "Expected RuntimeError"
+    except RuntimeError as exc:
+        assert "Failed to load Stable Diffusion model" in str(exc)
+        assert "model not found" in str(exc)
