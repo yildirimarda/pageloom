@@ -3,3 +3,14 @@ graphify-out/
 .opencode/
 *.agentloop-new
 .agentloop.local
+
+# python artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+*.egg-info/
+dist/
+build/
