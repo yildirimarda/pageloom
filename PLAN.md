@@ -4,7 +4,7 @@
 - [x] Add pyproject.toml with diffusers, Pillow, pypdf, pytest, ruff; include MPS/CPU/CUDA backend config notes
 - [x] Create src/pageloom/ package with __init__.py and module stubs for pipeline stages
 - [x] Write placeholder test in tests/test_placeholder.py that passes with pytest
-- [ ] Add README.md with one-paragraph PageLoom summary describing the KDP pipeline
+- [x] Add README.md with one-paragraph PageLoom summary describing the KDP pipeline
 
 ## Milestone 2: Illustration generation and text overlay
 - [ ] Implement Stable Diffusion illustration generator using Hugging Face diffusers library directly in Python
