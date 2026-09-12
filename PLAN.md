@@ -21,7 +21,7 @@
 ## Milestone 4: Generalization beyond alphabet pages
 - [x] Refactor pipeline to infer layout and style directly from any example page instead of hardcoding letter/word templates
 - [x] Add support for alternate page formats such as a photo-realistic object with its name and themed scene pages
-- [ ] Create end-to-end integration test that feeds one example page and generates a matching multi-page PDF
+- [x] Create end-to-end integration test that feeds one example page and generates a matching multi-page PDF
 
 ## Discovered
 - [ ] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
