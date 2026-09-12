@@ -1,4 +1,3 @@
-
 from PIL import Image
 
 from pageloom.pdf_compiler import KDP_PAGE_SIZE, PDFCompiler
