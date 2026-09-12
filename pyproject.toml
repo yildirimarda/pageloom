@@ -1,0 +1,30 @@
+[project]
+name = "pageloom"
+version = "0.1.0"
+description = "Python automation pipeline for designing and self-publishing children's books on Amazon KDP."
+readme = "README.md"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[dependencies]
+diffusers = ">=0.25"
+pillow = ">=10.0"
+pypdf = ">=4.0"
+transformers = ">=4.40"
+torch = ">=2.2"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pageloom"]

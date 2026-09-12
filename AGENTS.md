@@ -143,11 +143,11 @@ Leave the `PLAN.md` checkbox unchecked. Then stop.
 <!-- Fill this in for your own project. If these commands are wrong, the
      agent runs the wrong thing and wastes turns discovering that. -->
 
-- Tests:        `uv run pytest`
+- Tests:        `uv run pytest -q`
 - Lint:         `uv run ruff check .`
 - Format:       `uv run ruff format .`
 - Dependencies: `uv sync` / `uv add <package>`
-- Source:       `src/`
+- Source:       `src/pageloom/`
 - Tests dir:    `tests/`
 - Spark jobs live in `src/jobs/`. Test locally with
   `spark-submit --master local[2] src/jobs/<job>.py`
