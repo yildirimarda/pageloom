@@ -8,7 +8,7 @@
 
 ## Milestone 2: Illustration generation and text overlay
 - [x] Implement Stable Diffusion illustration generator using Hugging Face diffusers library directly in Python
-- [ ] Create style-prompt template builder that takes an example page description and produces a consistent prompt
+- [x] Create style-prompt template builder that takes an example page description and produces a consistent prompt
 - [ ] Add Pillow-based text overlay layer for letter and word rendering on generated illustrations
 - [ ] Build print-ready PDF compiler that combines pages into a single KDP-sized PDF
 
