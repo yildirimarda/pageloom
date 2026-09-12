@@ -4,16 +4,16 @@ version = "0.1.0"
 description = "Python automation pipeline for designing and self-publishing children's books on Amazon KDP."
 readme = "README.md"
 requires-python = ">=3.11"
+dependencies = [
+  "diffusers>=0.25",
+  "pillow>=10.0",
+  "pypdf>=4.0",
+  "transformers>=4.40",
+  "torch>=2.2",
+]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
-
-[dependencies]
-diffusers = ">=0.25"
-pillow = ">=10.0"
-pypdf = ">=4.0"
-transformers = ">=4.40"
-torch = ">=2.2"
 
 [build-system]
 requires = ["hatchling"]
@@ -25,6 +25,12 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+# Backend config notes:
+# - MPS (macOS Apple Silicon): torch.set_default_device('mps') or set device='mps' in diffusers pipelines.
+# - CPU: default fallback; set torch.set_num_threads(...) for parallelism.
+# - CUDA: requires torch with CUDA support; set device='cuda' in diffusers and ensure CUDA_VISIBLE_DEVICES is set.
+# The same Python code runs on all three backends with no behavioral differences.
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pageloom"]
