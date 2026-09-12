@@ -1,7 +1,7 @@
 # Plan
 
 ## Milestone 1: Project scaffolding and core dependencies
-- [ ] Add pyproject.toml with diffusers, Pillow, pypdf, pytest, ruff; include MPS/CPU/CUDA backend config notes
+- [x] Add pyproject.toml with diffusers, Pillow, pypdf, pytest, ruff; include MPS/CPU/CUDA backend config notes
 - [ ] Create src/pageloom/ package with __init__.py and module stubs for pipeline stages
 - [ ] Write placeholder test in tests/test_placeholder.py that passes with pytest
 - [ ] Add README.md with one-paragraph PageLoom summary describing the KDP pipeline
