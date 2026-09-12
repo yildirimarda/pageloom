@@ -36,19 +36,34 @@ class StylePromptBuilder:
         base = f"A children's book illustration in the style of: {self.example_description}"
         return f"{base}, content: {{content}}."
 
-    def build(self, content: str = "", theme: str = "") -> str:
+    def build(
+        self,
+        content: str = "",
+        theme: str = "",
+        page_format: str = "standard",
+    ) -> str:
         """Produce a concrete prompt using the example style and content."""
-        parts: list[str] = [
-            "A children's book illustration",
-        ]
-        if theme:
-            parts.append(f"theme: {theme}")
+        parts: list[str] = []
+        if page_format == "object_name":
+            parts.append("Photo-realistic children's book illustration")
+            if content:
+                parts.append(f"object name: {content}")
+        elif page_format == "themed_scene":
+            parts.append("Themed children's book scene illustration")
+            if theme:
+                parts.append(f"theme: {theme}")
+            if content:
+                parts.append(f"scene: {content}")
+        else:
+            parts.append("A children's book illustration")
+            if theme:
+                parts.append(f"theme: {theme}")
+            if content:
+                parts.append(f"content: {content}")
         if self.example_description:
             parts.append(f"style reference: {self.example_description}")
         elif self.example_style is not None:
             parts.append(
                 f"style reference: {self.example_style.get('composition', {}).get('layout_type', 'inferred layout')}"
             )
-        if content:
-            parts.append(f"content: {content}")
         return ", ".join(parts) + "."
