@@ -16,7 +16,7 @@
 - [x] Implement visual-style extractor that analyzes an example page for color palette, typography, and composition rules
 - [x] Add consistency guard that verifies generated pages match the example's illustration style and layout logic
 - [x] Ensure Docker container runs identically on CPU or CUDA with the same Python codebase and no behavioral differences
-- [ ] Verify macOS MPS backend acceleration runs the same pipeline via plain Python or uv with no code changes
+- [x] Verify macOS MPS backend acceleration runs the same pipeline via plain Python or uv with no code changes
 
 ## Milestone 4: Generalization beyond alphabet pages
 - [ ] Refactor pipeline to infer layout and style directly from any example page instead of hardcoding letter/word templates
