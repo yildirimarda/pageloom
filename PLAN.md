@@ -24,5 +24,5 @@
 - [x] Create end-to-end integration test that feeds one example page and generates a matching multi-page PDF
 
 ## Discovered
-- [ ] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
+- [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
 <!-- work found while building; appended by the agent -->
