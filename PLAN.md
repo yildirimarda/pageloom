@@ -221,6 +221,10 @@
       auto-routing claim has not yet been verified against a real live call (folds into the existing
       "do one real smoke test" item above) -- confirm it holds before presenting it in the README as a
       guarantee rather than OpenRouter's own claim.
+- [ ] Make CI green on main: several PRs merged without CI gating them, leaving failing checks behind. 
+      Open .github/workflows/ci.yml, run every check command it defines locally (lint, format check, type check, tests), 
+      fix every failure at the root — never by weakening, skipping or deleting tests — and 
+      confirm the full suite passes with the exact CI commands before opening the PR.
 
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
