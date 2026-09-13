@@ -81,8 +81,14 @@ class Pipeline:
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         for content, theme in zip(contents, themes):
+            structure = self.page_structure or {}
             prompt = self.prompt_builder.build(
-                content=content, theme=theme, page_format=page_format
+                content=content,
+                theme=theme,
+                page_format=page_format,
+                element_count=structure.get("element_count"),
+                arrangement=structure.get("arrangement"),
+                text_image_relationship=structure.get("text_image_relationship"),
             )
             width = self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
             height = self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
