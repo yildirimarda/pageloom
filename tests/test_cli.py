@@ -77,6 +77,31 @@ def test_cli_pages_exceeds_content():
     assert result == 1
 
 
+def test_cli_force_flag_passed_to_pipeline(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+    with patch("pageloom.cli.Pipeline") as mock_pipeline:
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--force",
+            ]
+        )
+        assert result == 0
+        call_kwargs = mock_instance.run.call_args.kwargs
+        assert call_kwargs.get("force") is True
+
+
 def test_cli_no_subcommand():
     result = main([])
     assert result == 1
