@@ -166,6 +166,37 @@ def test_analyze_passes_description_hint_into_prompt(tmp_path):
         sys.modules.update(original_modules)
 
 
+def test_smoke_real_image_and_live_openrouter_key():
+    """Real smoke test: create a real PNG, initialize with live OPENROUTER_API_KEY,
+    and confirm provider/model/endpoint are set correctly. The actual live call
+    is verified separately (see smoke_vision.py); here we confirm the real image
+    encodes correctly and the provider uses openrouter/free.
+    """
+    import os
+    import tempfile
+
+    from PIL import Image
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+        img_path = f.name
+    Image.new("RGB", (612, 612), color="red").save(img_path)
+
+    try:
+        key = os.environ.get("OPENROUTER_API_KEY")
+        # This test requires a real key to initialize; skip if missing
+        if not key:
+            pytest.skip("No OPENROUTER_API_KEY set for smoke test")
+        analyzer = PageVisionAnalyzer(provider="openrouter")
+        assert analyzer.provider_name == "openrouter"
+        # Confirm the free auto-router model is selected by default
+        assert analyzer.provider.model == "openrouter/free"
+        # Confirm image encoding works with a real file
+        b64_url = analyzer._encode_image(img_path)
+        assert b64_url.startswith("data:image/png;base64,")
+    finally:
+        os.unlink(img_path)
+
+
 def test_vision_call_failure_wrapped_in_vision_analysis_error(tmp_path):
     img_path = tmp_path / "example.png"
     Image.new("RGB", (612, 612), color="blue").save(img_path)
