@@ -111,6 +111,30 @@ def test_detect_structure_falls_back_to_heuristic_on_vision_failure(capsys):
     assert "falling back to" in captured.err.lower()
 
 
+def test_detect_structure_vision_capability_hint_on_image_rejection(capsys):
+    analyzer = _FakeVisionAnalyzer(
+        error=VisionAnalysisError("This model does not support image inputs")
+    )
+    img = Image.new("RGB", (512, 512), color="blue")
+    result = detect_structure(source=img, description="", vision_analyzer=analyzer)
+    assert result["content_pattern"] == "single_letter_word_illustration"
+    captured = capsys.readouterr()
+    assert "vision-based page analysis failed" in captured.err
+    assert "The selected model/provider does not appear to support image input" in captured.err
+
+
+def test_detect_structure_no_extra_hint_on_rate_limit(capsys):
+    analyzer = _FakeVisionAnalyzer(
+        error=VisionAnalysisError("LLM provider 'openrouter' rate limit exceeded.")
+    )
+    img = Image.new("RGB", (512, 512), color="blue")
+    result = detect_structure(source=img, description="", vision_analyzer=analyzer)
+    assert result["content_pattern"] == "single_letter_word_illustration"
+    captured = capsys.readouterr()
+    assert "vision-based page analysis failed" in captured.err
+    assert "does not appear to support image input" not in captured.err
+
+
 def test_detect_structure_without_vision_analyzer_uses_heuristic():
     img = Image.new("RGB", (512, 512), color="blue")
     result = detect_structure(source=img, description="object name pair", vision_analyzer=None)

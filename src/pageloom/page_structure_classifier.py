@@ -98,9 +98,24 @@ def detect_structure(
         try:
             return vision_analyzer.analyze(source, description=description)
         except VisionAnalysisError as exc:
-            print(
+            exc_text = str(exc).lower()
+            vision_capability_keywords = [
+                "image",
+                "vision",
+                "multimodal",
+                "does not support",
+                "doesn't support",
+                "not support",
+            ]
+            is_vision_capability_mismatch = any(kw in exc_text for kw in vision_capability_keywords)
+            warning_msg = (
                 f"Warning: vision-based page analysis failed, falling back to "
-                f"heuristic classification: {exc}",
-                file=sys.stderr,
+                f"heuristic classification: {exc}"
             )
+            if is_vision_capability_mismatch:
+                warning_msg += (
+                    " The selected model/provider does not appear to support image input. "
+                    "Set OPENROUTER_VISION_MODEL to a vision-capable model, or unset it to use the free auto-router (openrouter/free), which selects one automatically -- see README for how to find vision-capable models."
+                )
+            print(warning_msg, file=sys.stderr)
     return PageStructureClassifier(source=source, description=description).classify()
