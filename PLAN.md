@@ -177,6 +177,50 @@
       separate, small, one-time-per-run API call used only to understand the example page's
       structure/content -- it does not touch or replace local image generation, which remains free,
       private, and offline-capable (aside from the initial model download).
+- [x] Confirmed already true, no action needed (verified with a live-simulated test, not just code
+      reading): if the configured vision model/provider does NOT actually support image input --
+      whether because of a manual `OPENROUTER_VISION_MODEL`/`--vision-provider` override, or any other
+      API-level rejection -- the run does **not** crash. `generate_vision_content()` catches the
+      provider's exception, `PageVisionAnalyzer.analyze()` wraps it as `VisionAnalysisError`, and
+      `detect_structure()` catches exactly that, prints
+      `"Warning: vision-based page analysis failed, falling back to heuristic classification: <reason>"`
+      to stderr (including the real underlying error message), and continues the run via the
+      heuristic/description-based classifier. Same applies if the model *appears* to accept the
+      request but returns non-JSON or incomplete JSON (e.g. a model that silently ignores the image and
+      just replies in prose) -- `_parse_response()` raises the same `VisionAnalysisError`, same
+      graceful fallback. This was confirmed by simulating a "model does not support image inputs"-style
+      API error end-to-end through `pageloom generate` and observing a clean, informative, non-fatal
+      exit (see manual verification during this session; not yet captured as a checked-in
+      `tests/test_cli.py` case -- see the item below).
+- [ ] Add the "model rejects/ignores the image" scenario as an actual checked-in regression test in
+      `tests/test_cli.py` (e.g. `test_cli_vision_model_rejects_image_falls_back_gracefully`), simulating
+      a provider exception like `"This model does not support image inputs"` and asserting the CLI still
+      exits 0, prints the fallback warning, and completes generation via the heuristic path. This exact
+      scenario was manually verified during this planning session but is not yet locked in as a test.
+- [ ] Make the fallback warning more specifically actionable when the failure looks like a
+      vision-capability mismatch (as opposed to a rate limit, timeout, or bad key, which already get
+      distinct, clear messages via `_classify_provider_error`). Detect common phrasings in the
+      underlying error (e.g. containing "image", "vision", "multimodal", "does not support") and print
+      a dedicated hint such as: `"The selected model/provider does not appear to support image input.
+      Set OPENROUTER_VISION_MODEL to a vision-capable model, or unset it to use the free auto-router
+      (openrouter/free), which selects one automatically -- see README for how to find vision-capable
+      models."` Today the user still gets the raw underlying error message (not silence), so this is a
+      clarity improvement, not a bug fix.
+- [ ] Document in README.md, concretely, how to find current free vision-capable models on OpenRouter:
+      (a) https://openrouter.ai/models filtered by input modality "image", or
+      https://openrouter.ai/collections/vision-models for a maintained list across all providers
+      (paid and free); (b) as of this writing (Sept 2026) free vision-capable models observed include
+      `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`,
+      `inclusionai/ling-3.0-flash-vl:free`, and `thinkingmachines/inkling-small:free` -- but OpenRouter's
+      free-model roster "changes constantly" (their own wording), so don't hardcode any of these as a
+      recommendation without a freshness caveat; (c) explain why the codebase defaults to the
+      `openrouter/free` **auto-router** instead of naming a specific free model: OpenRouter's own docs
+      state this router "smartly filters for models that support features needed for your request such
+      as image understanding," so it should automatically avoid non-vision models for a vision request
+      without the user needing to look anything up. Note for whoever picks this up: that specific
+      auto-routing claim has not yet been verified against a real live call (folds into the existing
+      "do one real smoke test" item above) -- confirm it holds before presenting it in the README as a
+      guarantee rather than OpenRouter's own claim.
 
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
