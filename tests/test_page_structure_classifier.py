@@ -103,7 +103,9 @@ def test_detect_structure_prefers_vision_when_available():
 def test_detect_structure_falls_back_to_heuristic_on_vision_failure(capsys):
     analyzer = _FakeVisionAnalyzer(error=VisionAnalysisError("rate limited"))
     img = Image.new("RGB", (512, 512), color="blue")
-    result = detect_structure(source=img, description="single letter word", vision_analyzer=analyzer)
+    result = detect_structure(
+        source=img, description="single letter word", vision_analyzer=analyzer
+    )
     assert result["content_pattern"] == "single_letter_word_illustration"
     captured = capsys.readouterr()
     assert "falling back to" in captured.err.lower()

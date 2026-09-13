@@ -510,8 +510,7 @@ def test_llm_content_generator_open_ended_pattern_from_vision_analysis():
                 # A novel pattern id never hardcoded anywhere in content_generator.py.
                 "content_pattern": "number_count_matching",
                 "content_type_description": (
-                    "a page pairing a printed number with a matching count of "
-                    "illustrated objects"
+                    "a page pairing a printed number with a matching count of illustrated objects"
                 ),
                 "element_count": 3,
                 "arrangement": "row",

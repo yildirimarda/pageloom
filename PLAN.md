@@ -109,7 +109,7 @@
       Stable Diffusion can't do this) and add a README test asserting the documentation exists.
 
 ## Milestone 6: CI green + vision-analysis hardening (pending, not yet implemented)
-- [ ] **Fix the CI failure introduced by Milestone 5, in this exact order:**
+- [x] **Fix the CI failure introduced by Milestone 5, in this exact order:**
       1. `uv run ruff format --check .` currently FAILS -- confirmed by running `ruff format --check .`
          directly (the `ruff` binary works regardless of Python version, so this was verified even
          though the sandbox couldn't run the full Python toolchain). Exactly 5 files would be
