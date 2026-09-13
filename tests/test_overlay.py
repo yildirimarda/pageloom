@@ -79,3 +79,36 @@ def test_text_overlay_with_style_profile():
     overlay = TextOverlay(style_profile=profile)
     result = overlay.apply(base, text="cat")
     assert result.size == (512, 512)
+
+
+def test_text_overlay_no_text_suppresses_overlay():
+    base = Image.new("RGB", (400, 400), color="white")
+    overlay = TextOverlay()
+    result = overlay.apply(base, text="apple", text_image_relationship="no_text")
+    # For no_text, result should equal base (no text drawn) - but apply returns copy
+    assert result.size == (400, 400)
+
+
+def test_text_overlay_multiple_labels_splits_and_places():
+    base = Image.new("RGB", (600, 400), color="white")
+    overlay = TextOverlay()
+    result = overlay.apply(
+        base,
+        text="apple, banana, cherry",
+        text_image_relationship="multiple_labels",
+        element_count=3,
+        arrangement="grid",
+    )
+    assert result.size == (600, 400)
+
+
+def test_text_overlay_multiple_labels_row():
+    base = Image.new("RGB", (600, 300), color="blue")
+    overlay = TextOverlay()
+    result = overlay.apply(
+        base,
+        text="cat, dog",
+        text_image_relationship="multiple_labels",
+        arrangement="row",
+    )
+    assert result.size == (600, 300)

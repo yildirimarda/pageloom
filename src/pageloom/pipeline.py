@@ -107,6 +107,15 @@ class Pipeline:
                 )
                 image.save(str(cache_path), "PNG")
 
-            overlaid = self.overlay.apply(image, text=content, page_format=page_format)
+            structure = self.page_structure or {}
+            text_rel = structure.get("text_image_relationship")
+            overlaid = self.overlay.apply(
+                image,
+                text=content,
+                page_format=page_format,
+                text_image_relationship=text_rel,
+                element_count=structure.get("element_count"),
+                arrangement=structure.get("arrangement"),
+            )
             pages.append(overlaid)
         return self.compiler.compile(pages, output_path_obj)
