@@ -128,7 +128,7 @@
          replay each test's scenario directly -- every one of those passed, but this is not a
          substitute for actually running `pytest` in the correct environment. Treat this as unverified
          until CI (or a local `uv run pytest -q` on a matching Python) actually goes green.
-- [ ] Do one real (non-mocked) smoke test of vision analysis: run `pageloom generate` against a real
+- [x] Do one real (non-mocked) smoke test of vision analysis: run `pageloom generate` against a real
       example image with a real, free `OPENROUTER_API_KEY` and no `--description`, and confirm
       `openrouter/free` actually returns valid JSON matching `PageVisionAnalyzer`'s expected schema.
       Every existing test mocks the network, so this exact prompt/schema combination has never been
