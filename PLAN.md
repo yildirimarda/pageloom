@@ -145,7 +145,7 @@
       diffusion model to draw 3 items in a row; the illustration's structural fidelity depends
       entirely on whatever the content string happens to say (e.g. hoping "4 balloons" gets rendered
       as exactly 4 balloons), which diffusion models are known to be unreliable at for precise counts.
-- [ ] Decide how to handle `text_image_relationship == "multiple_labels"` and `"no_text"`
+- [x] Decide how to handle `text_image_relationship == "multiple_labels"` and `"no_text"`
       end-to-end -- `PageVisionAnalyzer`'s prompt already asks for one of `label_per_image` /
       `multiple_labels` / `no_text`, but `TextOverlay.apply()` (`src/pageloom/overlay.py`) only ever
       draws a single `text` string at a single position, with no branch reading
