@@ -56,7 +56,7 @@
 - [x] Add a test with two structurally different example pages (e.g. an alphabet page vs. an 
       object-naming page) and confirm the pipeline produces new pages matching each structure — 
       not just matching style
-- [ ] Reconcile the `--pages N` overflow trigger with generalized page structures: the current logic only 
+- [x] Reconcile the `--pages N` overflow trigger with generalized page structures: the current logic only 
       calls the LLM content generator when N exceeds the built-in 26-letter alphabet list, which doesn't 
       apply to non-alphabet example pages (object-naming or scene pages have no fixed built-in count) — 
       the LLM generator should trigger whenever N exceeds whatever content items are explicitly available, 
