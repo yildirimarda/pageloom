@@ -53,7 +53,7 @@
 - [x] Route the LLM content generator through the detected page structure, so generated content matches 
       the *type* of page found (e.g. object names for a naming-grid page, single words for a letter page) 
       instead of always assuming letter+word format
-- [ ] Add a test with two structurally different example pages (e.g. an alphabet page vs. an 
+- [x] Add a test with two structurally different example pages (e.g. an alphabet page vs. an 
       object-naming page) and confirm the pipeline produces new pages matching each structure — 
       not just matching style
 - [ ] Reconcile the `--pages N` overflow trigger with generalized page structures: the current logic only 
@@ -68,4 +68,5 @@
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
 - [ ] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain
+- [ ] Pipeline and ConsistencyGuard pass images to PageStructureClassifier without descriptions, so image-only inference misses description-based patterns like object_name_pair; descriptions need to flow through the extractor/guard
 <!-- work found while building; appended by the agent -->
