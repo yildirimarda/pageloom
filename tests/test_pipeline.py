@@ -6,6 +6,41 @@ from PIL import Image
 from pageloom.pipeline import Pipeline
 
 
+def test_pipeline_detects_page_structure_from_example(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (612, 612), color="blue")
+    img.save(img_path)
+    mock_gen = MagicMock()
+    pipeline = Pipeline(
+        example_image=str(img_path), description="alphabet letter word", generator=mock_gen
+    )
+    assert pipeline.page_structure is not None
+    assert pipeline.page_structure.get("content_pattern") == "single_letter_word_illustration"
+
+
+def test_pipeline_uses_description_for_object_structure(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (800, 400), color="green")
+    img.save(img_path)
+    mock_gen = MagicMock()
+    pipeline = Pipeline(
+        example_image=str(img_path), description="object name pair", generator=mock_gen
+    )
+    assert pipeline.page_structure.get("content_pattern") == "object_name_pair"
+
+
+def test_pipeline_derives_format_from_structure(tmp_path: Path):
+    img_path = tmp_path / "object_example.png"
+    img = Image.new("RGB", (800, 400), color="green")
+    img.save(img_path)
+    mock_gen = MagicMock()
+    pipeline = Pipeline(
+        example_image=str(img_path), description="object name pair", generator=mock_gen
+    )
+    # When standard is not overridden, the pipeline should derive object_name
+    assert pipeline.page_structure.get("content_pattern") == "object_name_pair"
+
+
 def test_pipeline_init_with_example_image(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")

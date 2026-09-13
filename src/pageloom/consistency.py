@@ -18,6 +18,7 @@ class ConsistencyGuard:
         self,
         example_image: str | Path | Image.Image | None = None,
         example_style: dict | None = None,
+        description: str = "",
         color_tolerance_percent: float = 20.0,
         size_tolerance_percent: float = 25.0,
     ) -> None:
@@ -30,15 +31,15 @@ class ConsistencyGuard:
             raise ValueError("Provide either example_image or example_style, not both.")
 
         if example_image is not None:
-            extractor = VisualStyleExtractor(example_image)
+            extractor = VisualStyleExtractor(example_image, description=description)
             self.example_style = extractor.extract()
             self.example_image = extractor.image
-            self.classifier = PageStructureClassifier(source=example_image)
+            self.classifier = PageStructureClassifier(source=example_image, description=description)
         elif example_style is not None:
             self.example_style = example_style
-            self.classifier = PageStructureClassifier(
-                description=str(example_style.get("composition", {}).get("layout_type", ""))
-            )
+            layout_hint = str(example_style.get("composition", {}).get("layout_type", ""))
+            description_for_class = description or layout_hint
+            self.classifier = PageStructureClassifier(description=description_for_class)
         else:
             raise ValueError("Provide either example_image or example_style.")
         if not hasattr(self, "example_image"):

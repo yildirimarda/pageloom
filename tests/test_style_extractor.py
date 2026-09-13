@@ -69,6 +69,13 @@ def test_extract_full():
     assert isinstance(result["palette"], list)
 
 
+def test_extract_structure_uses_description():
+    img = Image.new("RGB", (800, 400), color="green")
+    extractor = VisualStyleExtractor(img, description="object name pair")
+    structure = extractor.extract_structure()
+    assert structure.get("content_pattern") == "object_name_pair"
+
+
 def test_extract_structural_attributes():
     img = Image.new("RGB", (512, 512), color="blue")
     extractor = VisualStyleExtractor(img)

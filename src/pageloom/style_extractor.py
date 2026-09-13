@@ -14,13 +14,14 @@ from pageloom.page_structure_classifier import PageStructureClassifier
 class VisualStyleExtractor:
     """Analyze an example page image for style properties."""
 
-    def __init__(self, source: str | Path | Image.Image) -> None:
+    def __init__(self, source: str | Path | Image.Image, description: str = "") -> None:
         if isinstance(source, (str, Path)):
             self.image = Image.open(str(source))
         elif isinstance(source, Image.Image):
             self.image = source.copy()
         else:
             raise TypeError(f"Expected str, Path, or Image.Image, got {type(source)}")
+        self.description = description
         self._converted = False
 
     def _ensure_rgb(self) -> None:
@@ -97,7 +98,7 @@ class VisualStyleExtractor:
 
     def extract_structure(self) -> dict:
         """Infer structural content pattern and illustrated element count."""
-        classifier = PageStructureClassifier(source=self.image)
+        classifier = PageStructureClassifier(source=self.image, description=self.description)
         return classifier.classify()
 
     def extract(self) -> dict:
