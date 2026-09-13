@@ -136,6 +136,18 @@ By default — when you don't pass `--description` or `--no-vision` — PageLoom
 
 **Why this needs a separate model.** The `IllustrationGenerator` (Stable Diffusion via `diffusers`) used elsewhere in this pipeline is a text-to-image *generation* model: given a text prompt, it produces a new image. It has no ability to look at an existing image and describe what's in it — that capability doesn't exist in a generation-only model, regardless of which Stable Diffusion checkpoint is configured. Analyzing the example page therefore requires a genuinely multimodal (vision-capable) model, which is what `PageVisionAnalyzer` (`src/pageloom/vision.py`) calls out to via the same provider abstraction used by `LLMContentGenerator`.
 
+**How to find current free vision-capable models on OpenRouter.**
+
+OpenRouter's free model roster changes constantly, so rather than hardcoding any specific model ID, the codebase defaults to the `openrouter/free` auto-router (`OPENROUTER_VISION_MODEL`). OpenRouter's own docs state that this router "smartly filters for models that support features needed for your request such as image understanding," which means it should automatically select a vision-capable model for a vision request without the user needing to look anything up.
+
+If you prefer to pick a specific model (e.g., because you want a particular provider's free tier or need a vision-capable model with a larger context window), you have two options:
+
+(a) Browse https://openrouter.ai/models and filter by input modality **"image"** — this shows vision-capable models across all providers (paid and free). You can also visit https://openrouter.ai/collections/vision-models for a maintained list.
+
+(b) As of this writing (Sept 2026), observed free vision-capable models include `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`, `inclusionai/ling-3.0-flash-vl:free`, and `thinkingmachines/inkling-small:free`. Because OpenRouter's free-model roster "changes constantly" (their own wording), treat any named model as a snapshot with a freshness caveat — always verify the model is still free and vision-capable before relying on it.
+
+Set `OPENROUTER_VISION_MODEL` to the specific model ID you want, or leave it unset to use the free auto-router (`openrouter/free`), which avoids hardcoding a model that might get retired.
+
 **Free by default.** The default provider for vision analysis is OpenRouter (override with `PAGELOOM_VISION_PROVIDER` or `--vision-provider`), using OpenRouter's `openrouter/free` auto-router as the default model (`OPENROUTER_VISION_MODEL`). This router selects a free, zero-cost model that supports image understanding — OpenRouter's free model roster changes over time, so the auto-router avoids hardcoding a specific model ID that might get retired. You only need an `OPENROUTER_API_KEY` (free to create, no credit card required) for this to work; see [openrouter.ai](https://openrouter.ai) to get one. OpenAI (`gpt-4o-mini`, vision-capable) and Anthropic (`claude-3-haiku-20240307`, vision-capable) are also supported if you'd rather use those.
 
 **Graceful, non-fatal fallback.** If vision analysis is unavailable (no API key configured) or fails (rate limit, timeout, malformed response), PageLoom prints a warning to stderr and falls back automatically to the old image-size heuristic (or your `--description`, if you provide one) rather than aborting the run. Vision analysis is a best-effort upgrade, not a hard requirement.
