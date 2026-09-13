@@ -250,3 +250,100 @@ def test_cli_use_llm_failure_returns_error(tmp_path: Path):
 def test_cli_no_subcommand():
     result = main([])
     assert result == 1
+
+
+def test_cli_non_alphabet_structure_overflow_triggers_llm(tmp_path: Path):
+    """Non-alphabet page structures (e.g. object_name_pair) have 0 built-in content,
+    so any positive --pages exceeds available content and requires --use-llm."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="green")
+    img.save(img_path)
+
+    # Force the classifier to return a non-alphabet structure.
+    with (
+        patch("pageloom.cli.PageStructureClassifier") as mock_classifier,
+        patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
+    ):
+        mock_classifier.return_value.classify.return_value = {
+            "content_pattern": "object_name_pair",
+            "element_count": 1,
+            "arrangement": "centered",
+            "text_image_relationship": "label_per_image",
+        }
+        mock_openai_module = MagicMock()
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="Cat, Dog"))]
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_module.OpenAI.return_value = mock_client
+
+        import sys
+
+        original_modules = dict(sys.modules)
+        sys.modules["openai"] = mock_openai_module
+        try:
+            with patch("pageloom.cli.Pipeline") as mock_pipeline:
+                mock_instance = MagicMock()
+                mock_pipeline.return_value = mock_instance
+                mock_instance.run.return_value = tmp_path / "output.pdf"
+
+                # Without --use-llm, any positive pages should fail (0 available content)
+                result = main(
+                    [
+                        "generate",
+                        "--pages",
+                        "2",
+                        "--example",
+                        str(img_path),
+                        "--output",
+                        str(tmp_path / "out.pdf"),
+                    ]
+                )
+                assert result == 1
+
+                # With --use-llm, it should succeed by generating all content via LLM
+                result_llm = main(
+                    [
+                        "generate",
+                        "--pages",
+                        "2",
+                        "--example",
+                        str(img_path),
+                        "--output",
+                        str(tmp_path / "out_llm.pdf"),
+                        "--use-llm",
+                    ]
+                )
+                assert result_llm == 0
+                contents = mock_instance.run.call_args.kwargs.get("contents")
+                assert contents == ["Cat", "Dog"]
+        finally:
+            sys.modules.clear()
+            sys.modules.update(original_modules)
+
+
+def test_cli_non_alphabet_overflow_error_message(tmp_path: Path):
+    """The overflow error for non-alphabet pages should report 0 available items."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="blue")
+    img.save(img_path)
+
+    with patch("pageloom.cli.PageStructureClassifier") as mock_classifier:
+        mock_classifier.return_value.classify.return_value = {
+            "content_pattern": "multi_item_scene",
+            "element_count": 3,
+            "arrangement": "grid",
+            "text_image_relationship": "label_per_image",
+        }
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "5",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        assert result == 1

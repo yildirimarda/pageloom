@@ -138,45 +138,55 @@ def main(argv: list[str] | None = None) -> int:
             "text_image_relationship": "label_per_image",
         }
 
-    # The built-in alphabet list covers the first 26 items; beyond that we can
-    # optionally use the LLM-based generator.
-    ALPHABET_LIMIT = 26
+    # Determine available content based on detected page structure.
+    # Only alphabet-style pages have a fixed built-in content list.
+    content_pattern = page_structure.get("content_pattern", "single_letter_word_illustration")
+    if content_pattern == "single_letter_word_illustration":
+        built_in_contents = DEFAULT_CONTENTS
+        built_in_limit = len(DEFAULT_CONTENTS)
+        alphabet_limit = 26
+    else:
+        # Non-alphabet structures (object_name_pair, multi_item_scene,
+        # etc.) have no fixed built-in content list.
+        built_in_contents = []
+        built_in_limit = 0
+        alphabet_limit = 0
+
     use_llm = args.use_llm
-    if pages_value > len(DEFAULT_CONTENTS):
+    if pages_value > built_in_limit:
         if not use_llm:
             print(
                 f"Error: --pages ({pages_value}) exceeds available content "
-                f"({len(DEFAULT_CONTENTS)} items). Use --use-llm to generate extra content.",
+                f"({built_in_limit} items). Use --use-llm to generate extra content.",
                 file=sys.stderr,
             )
             return 1
-        contents = DEFAULT_CONTENTS[: len(DEFAULT_CONTENTS)]
+        contents = built_in_contents[:built_in_limit]
         try:
             llm_gen = LLMContentGenerator(provider=args.llm_provider)
-            extra = llm_gen.generate(
-                pages_value - len(DEFAULT_CONTENTS), page_structure=page_structure
-            )
+            extra = llm_gen.generate(pages_value - built_in_limit, page_structure=page_structure)
             contents.extend(extra)
         except RuntimeError as exc:
             print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
             return 1
-    elif pages_value > ALPHABET_LIMIT:
-        contents = DEFAULT_CONTENTS[:pages_value]
+    elif pages_value > alphabet_limit:
+        contents = built_in_contents[:pages_value]
         if use_llm:
-            # When explicitly requested, extend with LLM-generated content past 26
+            # When explicitly requested, extend with LLM-generated content
+            # past the alphabet limit.
             try:
                 llm_gen = LLMContentGenerator(provider=args.llm_provider)
                 extra = llm_gen.generate(
-                    pages_value - ALPHABET_LIMIT, page_structure=page_structure
+                    pages_value - alphabet_limit, page_structure=page_structure
                 )
-                contents = DEFAULT_CONTENTS[:ALPHABET_LIMIT] + extra
+                contents = built_in_contents[:alphabet_limit] + extra
             except RuntimeError as exc:
                 print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
                 return 1
         else:
-            contents = DEFAULT_CONTENTS[:pages_value]
+            contents = built_in_contents[:pages_value]
     else:
-        contents = DEFAULT_CONTENTS[:pages_value]
+        contents = built_in_contents[:pages_value]
 
     pipeline = Pipeline(example_image=args.example)
     result = pipeline.run(
