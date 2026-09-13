@@ -36,7 +36,7 @@
       fail with a clear message rather than silently defaulting to the built-in alphabet list
 - [x] Add a test (mocked, no real API calls) verifying each of the three providers is called with the 
       correct request shape and that provider switching works via config/CLI
-- [ ] Extend the consistency guard to validate structural conformance (page-structure classifier output) 
+- [x] Extend the consistency guard to validate structural conformance (page-structure classifier output) 
       in addition to style, once the classifier exists — the guard currently only checks color/typography/
       layout, not whether the generated page matches the example's content pattern      
 
@@ -67,4 +67,5 @@
 
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
+- [ ] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain
 <!-- work found while building; appended by the agent -->
