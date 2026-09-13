@@ -273,7 +273,7 @@ placeholder images.
       real free OpenRouter key for at least one real (non-placeholder) example image, and that the
       resulting PDF's pages are visually sensible -- open/render the PDF, don't just check that a file
       exists on disk.
-- [ ] Run three full, real (non-mocked) generations against three different real example page images
+- [x] Run three full, real (non-mocked) generations against three different real example page images
       representing genuinely different page types -- e.g. (1) an alphabet letter+word page, (2) a
       number/counting page, (3) a word-image matching page with 2-3 pairs -- with no `--description`
       flag, relying entirely on the default automatic vision analysis. For each: confirm the detected
