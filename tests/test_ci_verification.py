@@ -10,9 +10,9 @@ Evidence (verified via `gh run view 34769082741 --repo yildirimarda/pageloom`):
 - Tests: "208 passed, 1 skipped in 25.13s"
 """
 
-import yaml
 from pathlib import Path
 
+import yaml
 
 CI_FILE = Path(".github/workflows/ci.yml")
 
