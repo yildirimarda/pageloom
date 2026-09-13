@@ -6,7 +6,24 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
-from pageloom.vision import PageVisionAnalyzer, VisionAnalysisError
+from pageloom.vision import (
+    _VISION_CACHE_DIR,
+    PageVisionAnalyzer,
+    VisionAnalysisError,
+)
+
+
+@pytest.fixture(autouse=True)
+def clean_vision_cache():
+    # Ensure each vision test starts with a clean cache directory so
+    # mock-based tests don't accidentally read leftover cached results.
+    import shutil
+
+    if _VISION_CACHE_DIR.exists():
+        shutil.rmtree(_VISION_CACHE_DIR)
+    yield
+    if _VISION_CACHE_DIR.exists():
+        shutil.rmtree(_VISION_CACHE_DIR)
 
 
 def _mock_openai_module(content: str) -> MagicMock:
@@ -195,6 +212,110 @@ def test_smoke_real_image_and_live_openrouter_key():
         assert b64_url.startswith("data:image/png;base64,")
     finally:
         os.unlink(img_path)
+
+
+def test_vision_analysis_cache_reads_from_disk(tmp_path):
+    """Cached vision results should be read without calling the API again."""
+    from pageloom.vision import _VISION_CACHE_DIR
+
+    # Pre-populate a fake cache file with the exact hash key.
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    # Import the analyzer class directly for key computation
+    with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False):
+        analyzer = PageVisionAnalyzer(provider="openrouter")
+        key = analyzer._cache_key(str(img_path), description="")
+    cache_file = _VISION_CACHE_DIR / (key + ".json")
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    fake_result = {
+        "content_pattern": "cached_pattern",
+        "content_type_description": "cached",
+        "element_count": 42,
+        "arrangement": "grid",
+        "text_image_relationship": "label_per_image",
+        "example_content_items": ["cached item"],
+    }
+    with open(cache_file, "w", encoding="utf-8") as f:
+        import json
+
+        json.dump(fake_result, f)
+
+    # Now initialize a fresh analyzer and call analyze -- it should return
+    # the cached result without making any network call.
+    mock_openai_module, mock_client = _mock_openai_module("should not be called")
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False):
+            analyzer = PageVisionAnalyzer(provider="openrouter")
+            result = analyzer.analyze(str(img_path), description="")
+        assert result == fake_result
+        # No network call was made because the cache was hit.
+        assert mock_client.chat.completions.create.call_count == 0
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+        # Clean up cached file
+        if cache_file.exists():
+            cache_file.unlink()
+
+
+def test_vision_analysis_cache_writes_result(tmp_path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="green").save(img_path)
+
+    valid_json = (
+        '{"content_pattern": "new_pattern", '
+        '"content_type_description": "new desc", '
+        '"element_count": 2, "arrangement": "row", '
+        '"text_image_relationship": "label_per_image", '
+        '"example_content_items": ["new"]}'
+    )
+    mock_openai_module, _ = _mock_openai_module(valid_json)
+
+    from pageloom.vision import _VISION_CACHE_DIR
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False):
+            analyzer = PageVisionAnalyzer(provider="openrouter")
+            result = analyzer.analyze(str(img_path), description="test desc")
+        assert result["content_pattern"] == "new_pattern"
+        key = analyzer._cache_key(str(img_path), description="test desc")
+        cache_file = _VISION_CACHE_DIR / (key + ".json")
+        assert cache_file.exists()
+        import json
+
+        with open(cache_file, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        assert cached["content_pattern"] == "new_pattern"
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+        # Clean up
+        from pageloom.vision import _VISION_CACHE_DIR
+
+        # We already computed `key` inside the try block; reuse it here.
+        # If key isn't defined (e.g. exception before assignment), skip cleanup.
+        try:
+            cache_file_clean = _VISION_CACHE_DIR / (key + ".json")
+            if cache_file_clean.exists():
+                cache_file_clean.unlink()
+        except NameError:
+            pass
+
+
+def test_vision_analysis_cache_different_description_different_key(tmp_path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="red").save(img_path)
+
+    with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False):
+        analyzer = PageVisionAnalyzer(provider="openrouter")
+        key1 = analyzer._cache_key(str(img_path), description="a")
+        key2 = analyzer._cache_key(str(img_path), description="b")
+    assert key1 != key2
 
 
 def test_vision_call_failure_wrapped_in_vision_analysis_error(tmp_path):

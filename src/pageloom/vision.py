@@ -24,6 +24,7 @@ purpose. Analyzing an input image requires a genuinely multimodal
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -60,6 +61,9 @@ _ENV_VARS_BY_PROVIDER = {
     "anthropic": ["ANTHROPIC_API_KEY", "PAGELOOM_LLM_API_KEY"],
     "openrouter": ["OPENROUTER_API_KEY", "PAGELOOM_LLM_API_KEY"],
 }
+
+
+_VISION_CACHE_DIR = Path(".pageloom_vision")
 
 
 class VisionAnalysisError(RuntimeError):
@@ -128,13 +132,44 @@ class PageVisionAnalyzer:
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
         return f"data:image/png;base64,{b64}"
 
+    @staticmethod
+    def _image_bytes(source: str | Path | Image.Image) -> bytes:
+        image = source if isinstance(source, Image.Image) else Image.open(str(source))
+        image = image.convert("RGB")
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def _cache_key(self, source: str | Path | Image.Image, description: str) -> str:
+        raw_bytes = self._image_bytes(source)
+        key_data = raw_bytes + description.encode("utf-8")
+        return hashlib.md5(key_data).hexdigest()
+
+    def _cache_path_for(self, source: str | Path | Image.Image, description: str) -> Path:
+        _VISION_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        return _VISION_CACHE_DIR / (self._cache_key(source, description) + ".json")
+
     def analyze(self, source: str | Path | Image.Image, description: str = "") -> dict:
         """Send the example page image to the vision model and return a structure dict.
 
         Raises VisionAnalysisError on any failure (network, rate limit,
         malformed response) rather than silently returning a guess -- callers
         decide whether/how to fall back.
+
+        Results are cached under `.pageloom_vision/`, keyed on a hash of the
+        example image bytes plus the description string, so repeated runs
+        against the same image skip the vision API call.
         """
+        cache_path = self._cache_path_for(source, description)
+        try:
+            if cache_path.exists():
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except (OSError, json.JSONDecodeError, KeyError):
+            # If the cache file is corrupt or unreadable, ignore it and
+            # fall through to a fresh analysis.
+            pass
+
         try:
             image_data_url = self._encode_image(source)
         except Exception as exc:
@@ -157,7 +192,15 @@ class PageVisionAnalyzer:
             )
         except Exception as exc:
             raise VisionAnalysisError(f"Vision-based page analysis failed: {exc}") from exc
-        return self._parse_response(raw)
+        result = self._parse_response(raw)
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(result, f)
+        except OSError:
+            # Cache write failure is non-fatal; the analysis result is
+            # still valid.
+            pass
+        return result
 
     @staticmethod
     def _parse_response(raw: str) -> dict:
