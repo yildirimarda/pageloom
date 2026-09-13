@@ -169,6 +169,37 @@ def test_illustration_generator_generate_no_images_attr(mock_cuda, mock_mps, moc
     assert result.size == (128, 64)
 
 
+def test_illustration_generator_init_license_check_raises_for_unknown_model():
+    from pageloom.generator import IllustrationGenerator
+    from pageloom.license_check import LicenseVerificationError
+
+    try:
+        IllustrationGenerator(
+            model_id="unknown/model-id-123",
+            verify_license=True,
+        )
+        assert False, "Expected LicenseVerificationError"
+    except LicenseVerificationError as exc:
+        assert "Unknown model" in str(exc)
+        assert "book intended for sale" in str(exc)
+
+
+def test_illustration_generator_init_skips_license_check():
+    with (
+        patch("pageloom.generator.torch.cuda.is_available", return_value=False),
+        patch("pageloom.generator.torch.backends.mps.is_available", return_value=False),
+        patch("pageloom.generator.StableDiffusionPipeline.from_pretrained") as mock_from_pretrained,
+    ):
+        mock_pipeline = MagicMock()
+        mock_pipeline.to.side_effect = lambda device: mock_pipeline
+        mock_from_pretrained.return_value = mock_pipeline
+        from pageloom.generator import IllustrationGenerator
+
+        # Unknown model but license verification disabled
+        gen = IllustrationGenerator(model_id="unknown/model", verify_license=False)
+        assert gen.verify_license is False
+
+
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
 @patch("pageloom.generator.torch.cuda.is_available", return_value=False)
 @patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
