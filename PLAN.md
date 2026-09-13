@@ -267,7 +267,7 @@ placeholder images.
       (e.g. a 3-item word-image matching page) and visually confirm it actually shows 3 distinct
       picture+word pairs, not one illustration with one label, or a scene image with overlapping/wrong
       text.
-- [ ] Re-verify the live smoke test claim: it reports OpenRouter's free tier was reached successfully
+- [x] Re-verify the live smoke test claim: it reports OpenRouter's free tier was reached successfully
       but also that rate limits were hit (`free-models-per-day-high-balance`). Confirm a full, real
       `pageloom generate` run (not just the analysis step) completes successfully end-to-end against a
       real free OpenRouter key for at least one real (non-placeholder) example image, and that the
