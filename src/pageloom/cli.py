@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pageloom import settings
 from pageloom.content_generator import LLMContentGenerator
+from pageloom.page_structure_classifier import PageStructureClassifier
 from pageloom.pipeline import Pipeline
 
 # Default alphabet-style content list used when no explicit contents are given.
@@ -123,6 +124,20 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: --pages must be at least 1.", file=sys.stderr)
         return 1
 
+    # Detect page structure from the example image to route LLM content correctly
+    page_structure = None
+    try:
+        classifier = PageStructureClassifier(source=args.example)
+        page_structure = classifier.classify()
+    except (ValueError, OSError, FileNotFoundError):
+        # If classification fails, fall back to generic single-letter-word structure
+        page_structure = {
+            "content_pattern": "single_letter_word_illustration",
+            "element_count": 1,
+            "arrangement": "centered",
+            "text_image_relationship": "label_per_image",
+        }
+
     # The built-in alphabet list covers the first 26 items; beyond that we can
     # optionally use the LLM-based generator.
     ALPHABET_LIMIT = 26
@@ -138,7 +153,9 @@ def main(argv: list[str] | None = None) -> int:
         contents = DEFAULT_CONTENTS[: len(DEFAULT_CONTENTS)]
         try:
             llm_gen = LLMContentGenerator(provider=args.llm_provider)
-            extra = llm_gen.generate(pages_value - len(DEFAULT_CONTENTS))
+            extra = llm_gen.generate(
+                pages_value - len(DEFAULT_CONTENTS), page_structure=page_structure
+            )
             contents.extend(extra)
         except RuntimeError as exc:
             print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
@@ -149,7 +166,9 @@ def main(argv: list[str] | None = None) -> int:
             # When explicitly requested, extend with LLM-generated content past 26
             try:
                 llm_gen = LLMContentGenerator(provider=args.llm_provider)
-                extra = llm_gen.generate(pages_value - ALPHABET_LIMIT)
+                extra = llm_gen.generate(
+                    pages_value - ALPHABET_LIMIT, page_structure=page_structure
+                )
                 contents = DEFAULT_CONTENTS[:ALPHABET_LIMIT] + extra
             except RuntimeError as exc:
                 print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)

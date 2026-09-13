@@ -34,9 +34,7 @@ def test_classifier_classify_object_name_pair():
 
 def test_classifier_classify_multi_item_scene_from_description():
     img = Image.new("RGB", (612, 612), color="blue")
-    classifier = PageStructureClassifier(
-        source=img, description="multi-item labeled scene"
-    )
+    classifier = PageStructureClassifier(source=img, description="multi-item labeled scene")
     result = classifier.classify()
     assert result["content_pattern"] == "multi_item_scene"
     assert result["arrangement"] == "grid"
@@ -45,9 +43,7 @@ def test_classifier_classify_multi_item_scene_from_description():
 
 def test_classifier_classify_matching_puzzle_grid():
     img = Image.new("RGB", (800, 400), color="yellow")
-    classifier = PageStructureClassifier(
-        source=img, description="matching puzzle grid page"
-    )
+    classifier = PageStructureClassifier(source=img, description="matching puzzle grid page")
     result = classifier.classify()
     assert result["content_pattern"] == "multi_item_scene"
     assert result["arrangement"] == "grid"

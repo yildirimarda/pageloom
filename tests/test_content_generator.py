@@ -395,3 +395,91 @@ def test_llm_content_generator_generate_returns_correct_length():
     finally:
         sys.modules.clear()
         sys.modules.update(original_modules)
+
+
+def test_llm_content_generator_routed_by_object_name_pair():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Cat, Dog, Tree"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        result = gen.generate(
+            2,
+            page_structure={
+                "content_pattern": "object_name_pair",
+                "element_count": 1,
+                "arrangement": "centered",
+            },
+        )
+        assert len(result) == 2
+        assert result == ["Cat", "Dog"]
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "object names" in call_kwargs["messages"][0]["content"]
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_llm_content_generator_routed_by_multi_item_scene():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Garden Party, Forest Adventure"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        result = gen.generate(
+            2,
+            page_structure={
+                "content_pattern": "multi_item_scene",
+                "element_count": 3,
+                "arrangement": "grid",
+            },
+        )
+        assert len(result) == 2
+        assert result == ["Garden Party", "Forest Adventure"]
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "scene descriptions" in call_kwargs["messages"][0]["content"]
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_llm_content_generator_routed_by_single_letter_word_illustration():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Apple, Banana"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        result = gen.generate(
+            2, theme="nature", page_structure={"content_pattern": "single_letter_word_illustration"}
+        )
+        assert len(result) == 2
+        assert result == ["Apple", "Banana"]
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "nature" in call_kwargs["messages"][0]["content"]
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
