@@ -41,6 +41,9 @@ class StylePromptBuilder:
         content: str = "",
         theme: str = "",
         page_format: str = "standard",
+        element_count: int | None = None,
+        arrangement: str | None = None,
+        text_image_relationship: str | None = None,
     ) -> str:
         """Produce a concrete prompt using the example style and content."""
         parts: list[str] = []
@@ -60,6 +63,22 @@ class StylePromptBuilder:
                 parts.append(f"theme: {theme}")
             if content:
                 parts.append(f"content: {content}")
+        structure_parts: list[str] = []
+        if element_count is not None:
+            structure_parts.append(f"{element_count} illustrated element(s)")
+        if arrangement is not None:
+            structure_parts.append(f"arranged in a {arrangement} layout")
+        if text_image_relationship is not None:
+            if text_image_relationship == "label_per_image":
+                structure_parts.append("each image paired with its label")
+            elif text_image_relationship == "multiple_labels":
+                structure_parts.append("multiple text labels")
+            elif text_image_relationship == "no_text":
+                structure_parts.append("no text")
+            else:
+                structure_parts.append(f"text-image relationship: {text_image_relationship}")
+        if structure_parts:
+            parts.append("Structure: " + ", ".join(structure_parts))
         if self.example_description:
             parts.append(f"style reference: {self.example_description}")
         elif self.example_style is not None:

@@ -65,6 +65,19 @@ def test_style_prompt_builder_build_with_example_style_dict():
     assert "style reference: centered_text_with_illustration" in prompt
 
 
+def test_style_prompt_builder_build_with_structure():
+    builder = StylePromptBuilder("soft pastel")
+    prompt = builder.build(
+        content="apple",
+        element_count=3,
+        arrangement="grid",
+        text_image_relationship="label_per_image",
+    )
+    assert "3 illustrated element(s)" in prompt
+    assert "arranged in a grid layout" in prompt
+    assert "each image paired with its label" in prompt
+
+
 def test_style_prompt_builder_from_example_image(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (400, 400), color="blue")
