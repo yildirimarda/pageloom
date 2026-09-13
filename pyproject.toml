@@ -15,6 +15,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 
+[project.scripts]
+pageloom = "pageloom.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
