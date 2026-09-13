@@ -252,7 +252,7 @@ fallback. And the pages actually produced for N different example pages of diffe
 genuinely structurally faithful to their examples, not just pass a unit test built around solid-color
 placeholder images.
 
-- [ ] Re-verify Milestone 6's CI item specifically: don't trust the `[x]`. Actually open the GitHub
+- [x] Re-verify Milestone 6's CI item specifically: don't trust the `[x]`. Actually open the GitHub
       Actions run for the current `main` (or trigger one) and confirm the `ci` job is green, or if that
       isn't directly reachable, run the exact commands `.github/workflows/ci.yml` runs --
       `uv sync --all-extras --dev`, `uv run ruff check .`, `uv run ruff format --check .`,
