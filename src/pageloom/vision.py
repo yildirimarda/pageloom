@@ -138,7 +138,9 @@ class PageVisionAnalyzer:
         try:
             image_data_url = self._encode_image(source)
         except Exception as exc:
-            raise VisionAnalysisError(f"Could not read example image for vision analysis: {exc}") from exc
+            raise VisionAnalysisError(
+                f"Could not read example image for vision analysis: {exc}"
+            ) from exc
 
         prompt = _ANALYSIS_PROMPT
         if description:
@@ -179,8 +181,7 @@ class PageVisionAnalyzer:
                     ) from exc
             else:
                 raise VisionAnalysisError(
-                    f"Vision model returned non-JSON output that could not be parsed: "
-                    f"{raw[:200]!r}"
+                    f"Vision model returned non-JSON output that could not be parsed: {raw[:200]!r}"
                 ) from exc
 
         if not isinstance(data, dict):

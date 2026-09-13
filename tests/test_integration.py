@@ -141,9 +141,7 @@ def test_two_structurally_different_example_pages(tmp_path: Path):
     # is asserted directly below to confirm the routing itself is correct).
     assert pipeline_object.page_structure["content_pattern"] == "object_name_pair"
 
-    guard_object = ConsistencyGuard(
-        example_image=str(object_path), description="object name pair"
-    )
+    guard_object = ConsistencyGuard(example_image=str(object_path), description="object name pair")
     assert guard_object.example_structure["content_pattern"] == "object_name_pair"
 
     # 6. Confirm the two structures are different (not just style)

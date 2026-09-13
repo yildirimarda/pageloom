@@ -490,9 +490,7 @@ def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
         )
         assert result == 0
         mock_vision_cls.assert_called_once_with(provider=None)
-        mock_vision_cls.return_value.analyze.assert_called_once_with(
-            str(img_path), description=""
-        )
+        mock_vision_cls.return_value.analyze.assert_called_once_with(str(img_path), description="")
         # Novel, non-legacy content_pattern -> 0 built-in content -> LLM generates all of it.
         mock_llm_gen_cls.return_value.generate.assert_called_once_with(
             2, page_structure=vision_structure
