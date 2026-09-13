@@ -47,7 +47,7 @@
 - [x] Implement an explicit page-structure classifier: given an example page (image + description), 
       determine its content pattern — e.g. single letter+word+illustration, object-name pairs, 
       multi-item labeled scene, matching/puzzle grid — not just its color palette and typography
-- [ ] Extend the extracted template to capture structural attributes: number of illustrated elements 
+- [x] Extend the extracted template to capture structural attributes: number of illustrated elements 
       per page, their spatial arrangement, and the text-to-image relationship (one label per image, 
       multiple labels, no text, etc.)
 - [ ] Route the LLM content generator through the detected page structure, so generated content matches 
