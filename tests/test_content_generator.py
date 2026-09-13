@@ -134,6 +134,97 @@ def test_provider_switching_and_request_shapes():
         sys.modules.update(original_modules)
 
 
+def test_all_three_providers_called_with_correct_request_shape_and_switching():
+    import sys
+
+    # OpenAI provider request shape
+    mock_openai = MagicMock()
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock(message=MagicMock(content="A, B"))]
+    mock_client.chat.completions.create.return_value = mock_resp
+    mock_openai.OpenAI.return_value = mock_client
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai
+    try:
+        gen = LLMContentGenerator(provider="openai", api_key="test")
+        result = gen.generate(2, theme="test-theme")
+        assert result == ["A", "B"]
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["model"] == "gpt-4o-mini"
+        assert call_kwargs["temperature"] == 0.5
+        assert call_kwargs["max_tokens"] == 100  # max(100, 2*20)
+        assert isinstance(call_kwargs["messages"], list)
+        assert call_kwargs["messages"][0]["role"] == "user"
+        assert "test-theme" in call_kwargs["messages"][0]["content"]
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+    # Anthropic provider request shape
+    mock_anthropic = MagicMock()
+    mock_client_a = MagicMock()
+    mock_content = MagicMock()
+    mock_content.text = "C, D"
+    mock_resp_a = MagicMock()
+    mock_resp_a.content = [mock_content]
+    mock_client_a.messages.create.return_value = mock_resp_a
+    mock_anthropic.Anthropic.return_value = mock_client_a
+
+    original_modules = dict(sys.modules)
+    sys.modules["anthropic"] = mock_anthropic
+    try:
+        gen = LLMContentGenerator(provider="anthropic", api_key="test")
+        result = gen.generate(2, theme="animals")
+        assert result == ["C", "D"]
+        call_kwargs = mock_client_a.messages.create.call_args.kwargs
+        assert call_kwargs["model"] == "claude-3-haiku-20240307"
+        assert call_kwargs["temperature"] == 0.5
+        assert call_kwargs["max_tokens"] == 100  # max(100, 2*20)
+        assert isinstance(call_kwargs["messages"], list)
+        assert call_kwargs["messages"][0]["role"] == "user"
+        assert "animals" in call_kwargs["messages"][0]["content"]
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+    # OpenRouter provider request shape
+    mock_openai2 = MagicMock()
+    mock_client2 = MagicMock()
+    mock_resp2 = MagicMock()
+    mock_resp2.choices = [MagicMock(message=MagicMock(content="E, F"))]
+    mock_client2.chat.completions.create.return_value = mock_resp2
+    mock_openai2.OpenAI.return_value = mock_client2
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai2
+    try:
+        gen = LLMContentGenerator(provider="openrouter", api_key="test")
+        result = gen.generate(2, theme="nature")
+        assert result == ["E", "F"]
+        call_kwargs = mock_client2.chat.completions.create.call_args.kwargs
+        assert call_kwargs["model"] == "openai/gpt-4o-mini"
+        assert call_kwargs["temperature"] == 0.5
+        assert call_kwargs["max_tokens"] == 100  # max(100, 2*20)
+        assert isinstance(call_kwargs["messages"], list)
+        assert call_kwargs["messages"][0]["role"] == "user"
+        assert "nature" in call_kwargs["messages"][0]["content"]
+        assert gen.endpoint.startswith("https://openrouter.ai")
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+    # Provider switching via environment/config
+    with patch.dict(
+        "os.environ",
+        {"PAGELOOM_LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "env-key"},
+    ):
+        gen_env = LLMContentGenerator()
+        assert gen_env.provider_name == "anthropic"
+        assert gen_env.api_key == "env-key"
+
+
 def test_provider_selection_via_env():
     with patch.dict(
         "os.environ",
