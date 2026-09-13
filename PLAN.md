@@ -13,7 +13,7 @@
 - [x] Add Pillow-based text overlay layer for letter and word rendering on generated illustrations
 - [x] Build print-ready PDF compiler that combines pages into a single KDP-sized PDF
 - [x] Add a CLI entrypoint (e.g. `pageloom generate --pages N`) so the number of pages to generate is a runtime parameter instead of hardcoded
-- [ ] Handle `--pages N` logic: generate the first N items when N is within the available content list, and fall back gracefully (or raise a clear error) when N exceeds it
+- [x] Handle `--pages N` logic: generate the first N items when N is within the available content list, and fall back gracefully (or raise a clear error) when N exceeds it
 
 ## Milestone 3: Style consistency and pipeline portability
 - [x] Implement visual-style extractor that analyzes an example page for color palette, typography, and composition rules
