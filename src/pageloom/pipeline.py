@@ -72,6 +72,8 @@ class Pipeline:
             output_path_obj = Path(output_dir) / output_path_obj
         themes = themes or [""] * len(contents)
         pages: list[Image.Image] = []
+        width = self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
+        height = self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
 
         if cache_dir is None:
             cache_dir_path = output_path_obj.parent / ".pageloom_raw"
@@ -82,6 +84,109 @@ class Pipeline:
 
         for content, theme in zip(contents, themes):
             structure = self.page_structure or {}
+            text_rel = structure.get("text_image_relationship")
+
+            # Multi-sub-image compositing for multiple_labels
+            if text_rel == "multiple_labels":
+                labels = [label.strip() for label in content.split(",") if label.strip()]
+                if not labels:
+                    labels = [content] if content else [""]
+                count = structure.get("element_count")
+                if count is None:
+                    count = len(labels) or 1
+                else:
+                    count = max(count, len(labels) or 1)
+                # Build prompts and generate sub-images
+                sub_images: list[Image.Image] = []
+                for i in range(count):
+                    label_content = labels[i % len(labels)] if labels else content
+                    sub_page_format = page_format
+                    sub_prompt = self.prompt_builder.build(
+                        content=label_content,
+                        theme=theme,
+                        page_format=sub_page_format,
+                        element_count=1,
+                        arrangement=structure.get("arrangement"),
+                        text_image_relationship="label_per_image",
+                    )
+                    # Size each sub-image based on arrangement
+                    arrangement = structure.get("arrangement", "centered")
+                    if arrangement == "grid":
+                        cols = max(1, int(count**0.5))
+                        rows = max(1, (count + cols - 1) // cols)
+                        sub_w = max(150, int(width) // cols)
+                        sub_h = max(150, int(height) // rows)
+                    elif arrangement == "row":
+                        sub_w = max(150, int(width) // max(1, count))
+                        sub_h = max(150, int(height) // 2)
+                    elif arrangement == "column":
+                        sub_w = max(150, int(width) // 2)
+                        sub_h = max(150, int(height) // max(1, count))
+                    else:
+                        sub_w = max(150, int(width) // max(1, count))
+                        sub_h = max(150, int(height) // 2)
+
+                    # Generate sub-image (skip individual sub-caching for simplicity)
+                    sub_image = self.generator.generate(
+                        prompt=sub_prompt,
+                        width=sub_w,
+                        height=sub_h,
+                    )
+                    sub_images.append(sub_image)
+
+                # Composite sub-images onto a single full-size canvas
+                composited = Image.new("RGB", (int(width), int(height)), color="white")
+                if sub_images:
+                    arrangement = structure.get("arrangement", "centered")
+                    if arrangement == "grid":
+                        cols = max(1, int(len(sub_images) ** 0.5))
+                        rows = max(1, (len(sub_images) + cols - 1) // cols)
+                    elif arrangement == "row":
+                        cols, rows = len(sub_images), 1
+                    elif arrangement == "column":
+                        cols, rows = 1, len(sub_images)
+                    else:
+                        cols, rows = len(sub_images), 1
+
+                    cell_w = int(width) // cols if cols > 0 else int(width)
+                    cell_h = int(height) // rows if rows > 0 else int(height)
+
+                    for idx, sub_img in enumerate(sub_images):
+                        sub_img = sub_img.convert("RGB")
+                        sub_img = sub_img.resize((max(1, cell_w - 20), max(1, cell_h - 20)))
+                        if arrangement == "grid":
+                            r, c = idx // cols, idx % cols
+                            x = c * cell_w + (cell_w - sub_img.width) // 2
+                            y = r * cell_h + (cell_h - sub_img.height) // 2
+                        elif arrangement == "row":
+                            x = idx * cell_w + (cell_w - sub_img.width) // 2
+                            y = (int(height) - sub_img.height) // 2
+                        elif arrangement == "column":
+                            x = (int(width) - sub_img.width) // 2
+                            y = idx * cell_h + (cell_h - sub_img.height) // 2
+                        else:
+                            step = int(width) // max(1, len(sub_images))
+                            x = idx * step + (step - sub_img.width) // 2
+                            y = int(height) * 2 // 3 - sub_img.height // 2
+                        composited.paste(sub_img, (x, y))
+
+                # Apply text overlay with all labels on the composited canvas
+                overlay_text = ", ".join(
+                    [labels[i % len(labels)] for i in range(count)] if labels else [content] * count
+                )
+                image = composited
+                overlaid = self.overlay.apply(
+                    image,
+                    text=overlay_text,
+                    page_format=page_format,
+                    text_image_relationship=text_rel,
+                    element_count=count,
+                    arrangement=structure.get("arrangement"),
+                )
+                pages.append(overlaid)
+                continue
+
+            # Standard single-image path
             prompt = self.prompt_builder.build(
                 content=content,
                 theme=theme,
@@ -90,8 +195,6 @@ class Pipeline:
                 arrangement=structure.get("arrangement"),
                 text_image_relationship=structure.get("text_image_relationship"),
             )
-            width = self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
-            height = self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
 
             cache_key = f"{content}:{theme}:{page_format}:{int(width)}:{int(height)}:{prompt}"
             cache_filename = hashlib.md5(cache_key.encode("utf-8")).hexdigest() + ".png"
