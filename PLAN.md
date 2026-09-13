@@ -34,7 +34,7 @@
       so the model used isn't hardcoded and can be swapped without code changes
 - [x] Add a fallback/error path if the selected provider's API call fails (timeout, rate limit, invalid key) — 
       fail with a clear message rather than silently defaulting to the built-in alphabet list
-- [ ] Add a test (mocked, no real API calls) verifying each of the three providers is called with the 
+- [x] Add a test (mocked, no real API calls) verifying each of the three providers is called with the 
       correct request shape and that provider switching works via config/CLI
 - [ ] Extend the consistency guard to validate structural conformance (page-structure classifier output) 
       in addition to style, once the classifier exists — the guard currently only checks color/typography/
