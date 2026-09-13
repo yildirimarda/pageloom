@@ -1,7 +1,10 @@
 """Verification of the live smoke-test claim for Milestone 7 audit."""
 
+import os
 import subprocess
 import sys
+
+import pytest
 
 
 def test_smoke_vision_reports_rate_limit_reached():
@@ -12,6 +15,10 @@ def test_smoke_vision_reports_rate_limit_reached():
     (`openrouter/free`) reaches the endpoint successfully but hits the
     `free-models-per-day-high-balance` rate limit.
     """
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        pytest.skip("No OPENROUTER_API_KEY set for smoke test")
+
     result = subprocess.run(
         [sys.executable, "smoke_vision.py"],
         capture_output=True,
