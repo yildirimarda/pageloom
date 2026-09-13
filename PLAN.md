@@ -286,7 +286,7 @@ placeholder images.
       three providers (OpenAI, Anthropic, OpenRouter) read as intended (readable provider names, not
       Python class names like `OpenAIProvider`) by triggering each condition (mocked is fine here,
       since these are error-formatting checks, not integration behavior) and reading the actual output.
-- [ ] For every item re-verified above: if it holds up, leave it checked and add a one-line note citing
+- [x] For every item re-verified above: if it holds up, leave it checked and add a one-line note citing
       the evidence (file/line, command output, or the real PDF produced). If it does NOT hold up, do
       not just re-check it anyway -- uncheck it, describe the actual gap precisely (same style as the
       "Audit follow-up" entries under Discovered below), and fix it before moving on.      
