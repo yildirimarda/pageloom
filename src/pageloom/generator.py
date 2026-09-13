@@ -6,6 +6,8 @@ import torch
 from diffusers import StableDiffusionPipeline
 from PIL import Image
 
+from pageloom.license_check import LicenseVerifier
+
 
 class IllustrationGenerator:
     """Generate illustrations using a Stable Diffusion pipeline."""
@@ -15,7 +17,12 @@ class IllustrationGenerator:
         model_id: str = "runwayml/stable-diffusion-v1-5",
         device: str | None = None,
         torch_dtype: torch.dtype | None = None,
+        verify_license: bool = True,
+        license_context: str = "book intended for sale",
     ) -> None:
+        self.model_id = model_id
+        self.verify_license = verify_license
+        self.license_context = license_context
         if device is None:
             if torch.cuda.is_available():
                 device = "cuda"
@@ -25,6 +32,12 @@ class IllustrationGenerator:
                 device = "cpu"
         self.device = device
         self.torch_dtype = torch_dtype or torch.float32
+        if verify_license:
+            verifier = LicenseVerifier(model_id=model_id)
+            verifier.verify(
+                intended_use="commercial",
+                context=license_context,
+            )
         try:
             self.pipeline = StableDiffusionPipeline.from_pretrained(
                 model_id,
