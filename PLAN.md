@@ -137,7 +137,7 @@
       markdown-fence-stripping handles, or omit required fields, consider adding one retry with a
       stricter "respond with ONLY the JSON object, no other text" reminder before falling back to the
       heuristic classifier.
-- [ ] Feed `element_count` / `arrangement` / `text_image_relationship` into the actual Stable
+- [x] Feed `element_count` / `arrangement` / `text_image_relationship` into the actual Stable
       Diffusion prompt (`StylePromptBuilder.build()` in `src/pageloom/style.py`), not just into the
       LLM content-list generator's prompt and `ConsistencyGuard`'s comparison. Right now these
       structural fields are captured (by vision or heuristic) but never reach the image-generation
