@@ -30,7 +30,7 @@
       a single provider-agnostic interface, selectable via a config value or CLI flag (e.g. `--llm-provider`)
 - [x] Read provider credentials from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, 
       `OPENROUTER_API_KEY`), with a clear startup error if the selected provider's key is missing
-- [ ] Add a per-provider default model setting (e.g. config values for OpenAI/Anthropic/OpenRouter model IDs) 
+- [x] Add a per-provider default model setting (e.g. config values for OpenAI/Anthropic/OpenRouter model IDs) 
       so the model used isn't hardcoded and can be swapped without code changes
 - [ ] Add a fallback/error path if the selected provider's API call fails (timeout, rate limit, invalid key) — 
       fail with a clear message rather than silently defaulting to the built-in alphabet list
