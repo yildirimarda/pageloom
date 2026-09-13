@@ -61,7 +61,7 @@
       apply to non-alphabet example pages (object-naming or scene pages have no fixed built-in count) — 
       the LLM generator should trigger whenever N exceeds whatever content items are explicitly available, 
       regardless of detected page type
-- [ ] Update README.md to document LLM provider configuration (env vars, `--llm-provider` flag) and the 
+- [x] Update README.md to document LLM provider configuration (env vars, `--llm-provider` flag) and the 
       supported page structures / how a new structure type would be added — these capabilities were 
       planned after the README was already written and are currently undocumented      
 

@@ -37,3 +37,35 @@ def test_readme_has_output_structure_and_troubleshooting():
     content = readme_path.read_text()
     assert "Output" in content or "output" in content.lower()
     assert "Troubleshooting" in content or "troubleshooting" in content.lower()
+
+
+def test_readme_documents_llm_provider_configuration():
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+    assert "LLM Provider" in content or "LLM provider" in content
+    assert "PAGELOOM_LLM_PROVIDER" in content
+    assert "OPENAI_API_KEY" in content
+    assert "ANTHROPIC_API_KEY" in content
+    assert "OPENROUTER_API_KEY" in content
+
+
+def test_readme_documents_llm_provider_flag():
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+    assert "--llm-provider" in content
+    assert "--use-llm" in content
+
+
+def test_readme_documents_supported_page_structures():
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+    assert "single_letter_word_illustration" in content
+    assert "object_name_pair" in content
+    assert "multi_item_scene" in content
+
+
+def test_readme_documents_adding_new_structure():
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+    assert "Adding a New" in content or "new structure" in content.lower()
+    assert "PageStructureClassifier" in content
