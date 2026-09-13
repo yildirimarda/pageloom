@@ -32,6 +32,7 @@ def test_retry_with_backoff_raises_after_exhausting_retries():
         patch("pageloom.content_generator.time.sleep"),
         pytest.raises(RuntimeError, match="429"),
     ):
+
         def _fn():
             raise RuntimeError("429 free-models-per-day-high-balance")
 

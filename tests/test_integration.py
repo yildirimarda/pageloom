@@ -149,3 +149,52 @@ def test_two_structurally_different_example_pages(tmp_path: Path):
     assert alphabet_structure["content_pattern"] == "single_letter_word_illustration"
     assert object_structure["content_pattern"] == "object_name_pair"
     assert guard_object.example_structure["content_pattern"] == "object_name_pair"
+
+
+def test_multi_sub_image_compositing_for_multiple_labels(tmp_path: Path):
+    """Full multi-sub-image compositing: one illustration per element,
+    composited onto a single canvas with multiple TextOverlay placements."""
+    # 1. Create synthetic example image
+    example_path = tmp_path / "multi_example.png"
+    example_img = Image.new("RGB", (612, 612), color="yellow")
+    example_img.save(example_path)
+
+    # 2. Mock generator
+    mock_gen = MagicMock()
+
+    def make_sub_image(prompt: str, **kwargs) -> Image.Image:
+        # Return a small colored image so compositing is visible
+        return Image.new("RGB", (200, 200), color=(hash(prompt) % 256, 0, 255))
+
+    mock_gen.generate.side_effect = make_sub_image
+
+    # 3. Force multiple_labels structure
+    pipeline = Pipeline(
+        example_image=str(example_path),
+        description="multi-item labeled scene with multiple labels",
+        generator=mock_gen,
+        page_structure={
+            "content_pattern": "multi_item_scene",
+            "element_count": 3,
+            "arrangement": "grid",
+            "text_image_relationship": "multiple_labels",
+        },
+    )
+
+    output_path = tmp_path / "multi_composite.pdf"
+    result = pipeline.run(
+        contents=["apple, banana, cherry"],
+        themes=["nature"],
+        output_path=str(output_path),
+        page_format="standard",
+    )
+
+    assert isinstance(result, Path)
+    assert result.exists()
+
+    reader = PdfReader(str(output_path))
+    assert len(reader.pages) == 1
+
+    # The pipeline should have called generate 3 times (one per element)
+    # for the single content item with element_count=3
+    assert mock_gen.generate.call_count == 3
