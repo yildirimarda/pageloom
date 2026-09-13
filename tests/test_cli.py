@@ -32,7 +32,7 @@ def test_cli_generate_pages_param(tmp_path: Path):
         )
         assert result == 0
 
-        mock_pipeline.assert_called_once_with(example_image=str(img_path))
+        mock_pipeline.assert_called_once_with(example_image=str(img_path), description="")
         call_args = mock_instance.run.call_args
         assert call_args is not None
         contents = call_args.kwargs.get("contents") or call_args[1].get("contents")
@@ -102,7 +102,44 @@ def test_cli_force_flag_passed_to_pipeline(tmp_path: Path):
         assert call_kwargs.get("force") is True
 
 
-def test_cli_use_llm_extends_past_alphabet_limit(tmp_path: Path):
+def test_cli_pages_within_full_built_in_list_never_calls_llm(tmp_path: Path):
+    """Requesting up to the full built-in content list (35 items) should use the
+    built-in content directly and must NOT invoke the LLM generator, even when
+    --use-llm is passed -- the overflow trigger is the true content-availability
+    boundary (len(DEFAULT_CONTENTS)), not the legacy 26-letter alphabet count."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+
+    with (
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+        patch("pageloom.cli.LLMContentGenerator") as mock_llm_gen,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "28",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--use-llm",
+            ]
+        )
+        assert result == 0
+        mock_llm_gen.assert_not_called()
+        contents = mock_instance.run.call_args.kwargs.get("contents")
+        assert contents == DEFAULT_CONTENTS[:28]
+
+
+def test_cli_use_llm_extends_past_full_built_in_list(tmp_path: Path):
+    """Once --pages exceeds the full built-in list (35 items), the LLM generator
+    should be invoked for exactly the shortfall, on top of all 35 built-in items."""
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")
     img.save(img_path)
@@ -110,7 +147,7 @@ def test_cli_use_llm_extends_past_alphabet_limit(tmp_path: Path):
     mock_openai_module = MagicMock()
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Dragon, Unicorn, Whale"))]
+    mock_response.choices = [MagicMock(message=MagicMock(content="Dragon, Unicorn"))]
     mock_client.chat.completions.create.return_value = mock_response
     mock_openai_module.OpenAI.return_value = mock_client
 
@@ -131,7 +168,7 @@ def test_cli_use_llm_extends_past_alphabet_limit(tmp_path: Path):
                 [
                     "generate",
                     "--pages",
-                    "28",
+                    str(len(DEFAULT_CONTENTS) + 2),
                     "--example",
                     str(img_path),
                     "--output",
@@ -142,9 +179,9 @@ def test_cli_use_llm_extends_past_alphabet_limit(tmp_path: Path):
             assert result == 0
             contents = mock_instance.run.call_args.kwargs.get("contents")
             assert contents is not None
-            assert len(contents) == 28
-            assert contents[:26] == DEFAULT_CONTENTS[:26]
-            assert contents[26:] == ["Dragon", "Unicorn"]
+            assert len(contents) == len(DEFAULT_CONTENTS) + 2
+            assert contents[: len(DEFAULT_CONTENTS)] == DEFAULT_CONTENTS
+            assert contents[len(DEFAULT_CONTENTS) :] == ["Dragon", "Unicorn"]
     finally:
         sys.modules.clear()
         sys.modules.update(original_modules)
@@ -198,52 +235,43 @@ def test_cli_use_llm_exceeds_full_content_list(tmp_path: Path):
 
 
 def test_cli_llm_provider_flag_passed_to_generator(tmp_path: Path):
+    """--llm-provider must reach LLMContentGenerator, and this must only happen
+    once --pages truly exceeds the built-in content list."""
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")
     img.save(img_path)
 
-    mock_openai_module = MagicMock()
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Dragon, Unicorn"))]
-    mock_client.chat.completions.create.return_value = mock_response
-    mock_openai_module.OpenAI.return_value = mock_client
+    with (
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+        patch("pageloom.cli.LLMContentGenerator") as mock_llm_gen_cls,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+        mock_llm_gen_cls.return_value.generate.return_value = ["Dragon", "Unicorn"]
 
-    import sys
-
-    original_modules = dict(sys.modules)
-    sys.modules["openai"] = mock_openai_module
-    try:
-        with (
-            patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}),
-            patch("pageloom.cli.Pipeline") as mock_pipeline,
-        ):
-            mock_instance = MagicMock()
-            mock_pipeline.return_value = mock_instance
-            mock_instance.run.return_value = tmp_path / "output.pdf"
-
-            result = main(
-                [
-                    "generate",
-                    "--pages",
-                    "28",
-                    "--example",
-                    str(img_path),
-                    "--output",
-                    str(tmp_path / "out.pdf"),
-                    "--use-llm",
-                    "--llm-provider",
-                    "openrouter",
-                ]
-            )
-            assert result == 0
-    finally:
-        sys.modules.clear()
-        sys.modules.update(original_modules)
+        result = main(
+            [
+                "generate",
+                "--pages",
+                str(len(DEFAULT_CONTENTS) + 2),
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--use-llm",
+                "--llm-provider",
+                "openrouter",
+            ]
+        )
+        assert result == 0
+        mock_llm_gen_cls.assert_called_once_with(provider="openrouter")
 
 
-def test_cli_use_llm_failure_returns_error(tmp_path: Path):
-    result = main(["generate", "--pages", "28", "--use-llm"])
+def test_cli_use_llm_failure_returns_error():
+    """When --pages exceeds the built-in list and no provider key is configured,
+    the LLM call fails and the CLI reports a clear error (no Pipeline is run)."""
+    result = main(["generate", "--pages", str(len(DEFAULT_CONTENTS) + 1), "--use-llm"])
     assert result == 1
 
 
@@ -347,3 +375,49 @@ def test_cli_non_alphabet_overflow_error_message(tmp_path: Path):
             ]
         )
         assert result == 1
+
+
+def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
+    """--description must be passed through to both PageStructureClassifier (so
+    structural routing works from the CLI, not just the library API) and Pipeline."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (800, 400), color="green")
+    img.save(img_path)
+
+    with (
+        patch("pageloom.cli.PageStructureClassifier") as mock_classifier,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+        patch("pageloom.cli.LLMContentGenerator") as mock_llm_gen_cls,
+    ):
+        mock_classifier.return_value.classify.return_value = {
+            "content_pattern": "object_name_pair",
+            "element_count": 1,
+            "arrangement": "centered",
+            "text_image_relationship": "label_per_image",
+        }
+        mock_llm_gen_cls.return_value.generate.return_value = ["Cat", "Dog"]
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--description",
+                "object name pair",
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--use-llm",
+            ]
+        )
+        assert result == 0
+        mock_classifier.assert_called_once_with(
+            source=str(img_path), description="object name pair"
+        )
+        mock_pipeline.assert_called_once_with(
+            example_image=str(img_path), description="object name pair"
+        )

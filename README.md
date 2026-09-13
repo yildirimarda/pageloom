@@ -100,13 +100,19 @@ The CLI wrapper (`pageloom generate --pages N`) supports:
 
 - `--use-llm` — enable LLM-based content generation when `--pages` exceeds the available built-in list.
 - `--llm-provider {openai,anthropic,openrouter}` — override the provider selected by `PAGELOOM_LLM_PROVIDER`.
+- `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). This is passed straight through to `PageStructureClassifier` and `Pipeline`, so structural routing works from the CLI and isn't limited to pure image-size heuristics. Without it, the CLI falls back to image heuristics alone, which can misclassify structures like `object_name_pair` that heuristics can't distinguish from a plain image.
 
 Example:
 
 ```bash
-# Generate 30 pages with Anthropic when the built-in alphabet list (26) is exceeded
+# Generate 30 pages with Anthropic once the built-in content list is exceeded
 pageloom generate --pages 30 --use-llm --llm-provider anthropic --example example.png
+
+# Describe the example page so an object-naming layout is classified correctly
+pageloom generate --pages 10 --use-llm --example object_example.png --description "object name pair"
 ```
+
+Note: the LLM generator triggers whenever `--pages` exceeds the number of content items actually available for the *detected* structure — the built-in 35-item list for `single_letter_word_illustration` pages, or 0 for any other structure (which have no fixed built-in list).
 
 ### Per-Provider Default Models
 
@@ -143,7 +149,7 @@ To add a new page structure:
 
 ### Description-Based Pattern Inference
 
-The pipeline, extractor, classifier, and consistency guard all accept an optional `description` string. When a page is described (e.g., `"object name pair"` or `"alphabet letter word"`), the description guides `PageStructureClassifier` to infer the correct content pattern even when the image dimensions alone would suggest a different structure. Pass `description` to `Pipeline`, `VisualStyleExtractor`, `ConsistencyGuard`, or `PageStructureClassifier` directly to improve structural routing accuracy.
+The pipeline, extractor, classifier, and consistency guard all accept an optional `description` string. When a page is described (e.g., `"object name pair"` or `"alphabet letter word"`), the description guides `PageStructureClassifier` to infer the correct content pattern even when the image dimensions alone would suggest a different structure. Pass `description` to `Pipeline`, `VisualStyleExtractor`, `ConsistencyGuard`, or `PageStructureClassifier` directly to improve structural routing accuracy, or pass `--description` on the CLI (see CLI Flags above) to get the same effect without writing Python.
 
 ## CLI Usage Examples
 

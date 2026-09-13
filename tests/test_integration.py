@@ -88,8 +88,14 @@ def test_two_structurally_different_example_pages(tmp_path: Path):
 
     mock_gen.generate.side_effect = make_image
 
-    # 4. Run pipeline for alphabet structure (standard format)
-    pipeline_alpha = Pipeline(example_image=str(alphabet_path), generator=mock_gen)
+    # 4. Run pipeline for alphabet structure (standard format), passing the
+    # same description used for classification above so Pipeline/ConsistencyGuard
+    # route through the same structure that was detected, not pure image heuristics.
+    pipeline_alpha = Pipeline(
+        example_image=str(alphabet_path),
+        description="alphabet letter word",
+        generator=mock_gen,
+    )
     output_alpha = tmp_path / "alphabet_output.pdf"
     result_alpha = pipeline_alpha.run(
         contents=["Apple", "Banana"],
@@ -103,16 +109,23 @@ def test_two_structurally_different_example_pages(tmp_path: Path):
     # Verify the generated pages structurally match the alphabet example
     # (Use the first generated image from the mock for structural check)
     # We rely on the pipeline using the source image structure to guide output.
-    guard_alpha = ConsistencyGuard(example_image=str(alphabet_path))
-    # The mock generator returns the same-size image; structural conformance
-    # relies on image size + classifier inference. Verify the guard sees
-    # the same structural reference.
+    guard_alpha = ConsistencyGuard(
+        example_image=str(alphabet_path), description="alphabet letter word"
+    )
     assert guard_alpha.example_structure["content_pattern"] == "single_letter_word_illustration"
 
-    # 5. Run pipeline for object-naming structure
+    # 5. Run pipeline for object-naming structure. The description is required
+    # here too: the example image alone (800x400) is wide enough that pure
+    # image heuristics would misclassify it as multi_item_scene, exactly the
+    # gap described in PLAN.md -- descriptions must flow through the pipeline
+    # and consistency guard, not just the standalone classifier.
     mock_gen.reset_mock()
     mock_gen.generate.side_effect = make_image
-    pipeline_object = Pipeline(example_image=str(object_path), generator=mock_gen)
+    pipeline_object = Pipeline(
+        example_image=str(object_path),
+        description="object name pair",
+        generator=mock_gen,
+    )
     output_object = tmp_path / "object_output.pdf"
     result_object = pipeline_object.run(
         contents=["Cat", "Dog"],
@@ -123,12 +136,18 @@ def test_two_structurally_different_example_pages(tmp_path: Path):
     assert isinstance(result_object, Path)
     assert result_object.exists()
 
-    guard_object = ConsistencyGuard(example_image=str(object_path))
-    # Pure image inference for the wide image yields multi_item_scene
-    assert guard_object.example_structure["content_pattern"] == "multi_item_scene"
+    # Pipeline.run() should also have derived the object_name page_format from
+    # the detected structure (it was explicitly passed here, but page_structure
+    # is asserted directly below to confirm the routing itself is correct).
+    assert pipeline_object.page_structure["content_pattern"] == "object_name_pair"
+
+    guard_object = ConsistencyGuard(
+        example_image=str(object_path), description="object name pair"
+    )
+    assert guard_object.example_structure["content_pattern"] == "object_name_pair"
 
     # 6. Confirm the two structures are different (not just style)
     assert alphabet_structure["content_pattern"] != object_structure["content_pattern"]
     assert alphabet_structure["content_pattern"] == "single_letter_word_illustration"
     assert object_structure["content_pattern"] == "object_name_pair"
-    assert guard_object.example_structure["content_pattern"] == "multi_item_scene"
+    assert guard_object.example_structure["content_pattern"] == "object_name_pair"

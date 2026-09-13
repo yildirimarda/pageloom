@@ -74,6 +74,17 @@ def main(argv: list[str] | None = None) -> int:
         default="example.png",
         help="Path to the example page image.",
     )
+    generate_parser.add_argument(
+        "--description",
+        type=str,
+        default="",
+        help=(
+            "Optional free-text description of the example page (e.g. "
+            "'object name pair' or 'alphabet letter word'). Passed to the "
+            "page-structure classifier and pipeline to improve structural "
+            "routing accuracy beyond pure image heuristics."
+        ),
+    )
     output_dir = settings.get_output_dir()
     default_output = str(Path(output_dir) / "output.pdf") if output_dir else "output.pdf"
     generate_parser.add_argument(
@@ -124,10 +135,11 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: --pages must be at least 1.", file=sys.stderr)
         return 1
 
-    # Detect page structure from the example image to route LLM content correctly
+    # Detect page structure from the example image (plus optional description)
+    # to route LLM content correctly.
     page_structure = None
     try:
-        classifier = PageStructureClassifier(source=args.example)
+        classifier = PageStructureClassifier(source=args.example, description=args.description)
         page_structure = classifier.classify()
     except (ValueError, OSError, FileNotFoundError):
         # If classification fails, fall back to generic single-letter-word structure
@@ -144,14 +156,16 @@ def main(argv: list[str] | None = None) -> int:
     if content_pattern == "single_letter_word_illustration":
         built_in_contents = DEFAULT_CONTENTS
         built_in_limit = len(DEFAULT_CONTENTS)
-        alphabet_limit = 26
     else:
         # Non-alphabet structures (object_name_pair, multi_item_scene,
         # etc.) have no fixed built-in content list.
         built_in_contents = []
         built_in_limit = 0
-        alphabet_limit = 0
 
+    # The LLM generator should trigger whenever N exceeds whatever content
+    # items are explicitly available for the detected structure -- not a
+    # hardcoded 26-letter boundary that only applies to the legacy alphabet
+    # list.
     use_llm = args.use_llm
     if pages_value > built_in_limit:
         if not use_llm:
@@ -169,26 +183,10 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as exc:
             print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
             return 1
-    elif pages_value > alphabet_limit:
-        contents = built_in_contents[:pages_value]
-        if use_llm:
-            # When explicitly requested, extend with LLM-generated content
-            # past the alphabet limit.
-            try:
-                llm_gen = LLMContentGenerator(provider=args.llm_provider)
-                extra = llm_gen.generate(
-                    pages_value - alphabet_limit, page_structure=page_structure
-                )
-                contents = built_in_contents[:alphabet_limit] + extra
-            except RuntimeError as exc:
-                print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
-                return 1
-        else:
-            contents = built_in_contents[:pages_value]
     else:
         contents = built_in_contents[:pages_value]
 
-    pipeline = Pipeline(example_image=args.example)
+    pipeline = Pipeline(example_image=args.example, description=args.description)
     result = pipeline.run(
         contents=contents,
         output_path=args.output,
