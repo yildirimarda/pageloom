@@ -5,7 +5,7 @@
 - [x] Create src/pageloom/ package with __init__.py and module stubs for pipeline stages
 - [x] Write placeholder test in tests/test_placeholder.py that passes with pytest
 - [x] Add README.md with one-paragraph PageLoom summary describing the KDP pipeline
-- [ ] Write a detailed README.md covering installation (Docker and local via plain Python/uv), model/dependency setup, CLI usage examples, expected output structure, and troubleshooting notes
+- [x] Write a detailed README.md covering installation (Docker and local via plain Python/uv), model/dependency setup, CLI usage examples, expected output structure, and troubleshooting notes
 
 ## Milestone 2: Illustration generation and text overlay
 - [x] Implement Stable Diffusion illustration generator using Hugging Face diffusers library directly in Python
