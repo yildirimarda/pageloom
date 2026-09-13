@@ -189,6 +189,48 @@ def test_cli_use_llm_exceeds_full_content_list(tmp_path: Path):
         sys.modules.update(original_modules)
 
 
+def test_cli_llm_provider_flag_passed_to_generator(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Dragon, Unicorn"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with patch("pageloom.cli.Pipeline") as mock_pipeline:
+            mock_instance = MagicMock()
+            mock_pipeline.return_value = mock_instance
+            mock_instance.run.return_value = tmp_path / "output.pdf"
+
+            result = main(
+                [
+                    "generate",
+                    "--pages",
+                    "28",
+                    "--example",
+                    str(img_path),
+                    "--output",
+                    str(tmp_path / "out.pdf"),
+                    "--use-llm",
+                    "--llm-provider",
+                    "openrouter",
+                ]
+            )
+            assert result == 0
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
 def test_cli_use_llm_failure_returns_error(tmp_path: Path):
     result = main(["generate", "--pages", "28", "--use-llm"])
     assert result == 1
