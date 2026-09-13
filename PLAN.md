@@ -20,7 +20,7 @@
 - [x] Add consistency guard that verifies generated pages match the example's illustration style and layout logic
 - [x] Ensure Docker container runs identically on CPU or CUDA with the same Python codebase and no behavioral differences
 - [x] Verify macOS MPS backend acceleration runs the same pipeline via plain Python or uv with no code changes
-- [ ] Verify the chosen Stable Diffusion model's license (e.g. CreativeML OpenRAIL-M) permits commercial use before generated images go into a book intended for sale
+- [x] Verify the chosen Stable Diffusion model's license (e.g. CreativeML OpenRAIL-M) permits commercial use before generated images go into a book intended for sale
 - [ ] Add caching/resume support so already-generated raw illustrations are skipped on rerun unless a `--force` flag is passed (saves time during iteration)
 - [ ] Support environment-variable overrides for key settings (model id, device, output dir, HF cache dir) so Docker and local runs can differ in config without code changes
 - [ ] Document and handle first-time model download/caching (e.g. HF_HOME volume) so Docker builds don't re-download weights on every run
