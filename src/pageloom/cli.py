@@ -98,6 +98,13 @@ def main(argv: list[str] | None = None) -> int:
     if pages_value < 1:
         print("Error: --pages must be at least 1.", file=sys.stderr)
         return 1
+    if pages_value > len(DEFAULT_CONTENTS):
+        print(
+            f"Error: --pages ({pages_value}) exceeds available content "
+            f"({len(DEFAULT_CONTENTS)} items).",
+            file=sys.stderr,
+        )
+        return 1
 
     contents = DEFAULT_CONTENTS[:pages_value]
 
