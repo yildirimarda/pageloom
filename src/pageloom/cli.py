@@ -100,6 +100,13 @@ def main(argv: list[str] | None = None) -> int:
         default=False,
         help="Use optional LLM-based content generator when pages exceed the built-in list.",
     )
+    generate_parser.add_argument(
+        "--llm-provider",
+        type=str,
+        default=None,
+        choices=["openai", "anthropic", "openrouter"],
+        help="LLM provider to use for content generation (default: openai).",
+    )
 
     args = parser.parse_args(argv)
 
@@ -130,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         contents = DEFAULT_CONTENTS[: len(DEFAULT_CONTENTS)]
         try:
-            llm_gen = LLMContentGenerator()
+            llm_gen = LLMContentGenerator(provider=args.llm_provider)
             extra = llm_gen.generate(pages_value - len(DEFAULT_CONTENTS))
             contents.extend(extra)
         except RuntimeError as exc:
@@ -141,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         if use_llm:
             # When explicitly requested, extend with LLM-generated content past 26
             try:
-                llm_gen = LLMContentGenerator()
+                llm_gen = LLMContentGenerator(provider=args.llm_provider)
                 extra = llm_gen.generate(pages_value - ALPHABET_LIMIT)
                 contents = DEFAULT_CONTENTS[:ALPHABET_LIMIT] + extra
             except RuntimeError as exc:

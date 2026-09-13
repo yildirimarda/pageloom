@@ -63,6 +63,91 @@ def test_llm_content_generator_generate_uses_mock_openai():
         sys.modules.update(original_modules)
 
 
+def test_provider_switching_and_request_shapes():
+    import sys
+
+    # Test openai provider
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Apple, Banana"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        gen = LLMContentGenerator(provider="openai", api_key="test")
+        result = gen.generate(2)
+        assert result == ["Apple", "Banana"]
+        mock_client.chat.completions.create.assert_called_once()
+        call_args = mock_client.chat.completions.create.call_args
+        assert call_args.kwargs["model"] == "gpt-4o-mini"
+        assert "messages" in call_args.kwargs
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+    # Test openrouter provider (openai-compatible endpoint)
+    mock_openai_module2 = MagicMock()
+    mock_client2 = MagicMock()
+    mock_response2 = MagicMock()
+    mock_response2.choices = [MagicMock(message=MagicMock(content="Cherry, Dragon"))]
+    mock_client2.chat.completions.create.return_value = mock_response2
+    mock_openai_module2.OpenAI.return_value = mock_client2
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module2
+    try:
+        gen = LLMContentGenerator(provider="openrouter", api_key="test")
+        result = gen.generate(2)
+        assert result == ["Cherry", "Dragon"]
+        call_args = mock_client2.chat.completions.create.call_args
+        assert call_args.kwargs["model"] == "openai/gpt-4o-mini"
+        # OpenRouter uses its default endpoint
+        assert gen.endpoint.startswith("https://openrouter.ai")
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+    # Test anthropic provider
+    mock_anthropic_module = MagicMock()
+    mock_client_anthropic = MagicMock()
+    mock_content = MagicMock()
+    mock_content.text = "Fish, Grape"
+    mock_response_anthropic = MagicMock()
+    mock_response_anthropic.content = [mock_content]
+    mock_client_anthropic.messages.create.return_value = mock_response_anthropic
+    mock_anthropic_module.Anthropic.return_value = mock_client_anthropic
+
+    original_modules = dict(sys.modules)
+    sys.modules["anthropic"] = mock_anthropic_module
+    try:
+        gen = LLMContentGenerator(provider="anthropic", api_key="test")
+        result = gen.generate(2)
+        assert result == ["Fish", "Grape"]
+        mock_client_anthropic.messages.create.assert_called_once()
+        call_args = mock_client_anthropic.messages.create.call_args
+        assert call_args.kwargs["model"] == "claude-3-haiku-20240307"
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_provider_selection_via_env():
+    with patch.dict(
+        "os.environ",
+        {"PAGELOOM_LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test-key"},
+    ):
+        gen = LLMContentGenerator()
+        assert gen.provider_name == "anthropic"
+
+
+def test_unknown_provider_raises():
+    with pytest.raises(ValueError, match="Unknown LLM provider"):
+        LLMContentGenerator(provider="unknown")
+
+
 def test_llm_content_generator_generate_returns_correct_length():
     gen = LLMContentGenerator()
     mock_openai_module = MagicMock()
