@@ -161,7 +161,7 @@
       repeatedly against the same example image, which burns through free-tier rate limits
       (OpenRouter's free models are commonly capped around 20 requests/minute and 200/day)
       unnecessarily during development.
-- [ ] Consider a `pageloom check-vision` (or similarly named) CLi subcommand that does a one-shot
+- [x] Consider a `pageloom check-vision` (or similarly named) CLi subcommand that does a one-shot
       smoke test of the configured vision provider/model and reports success/failure clearly, so users
       can validate their free OpenRouter (or OpenAI/Anthropic) setup once before a full generation run
       instead of discovering a misconfiguration mid-generation.
