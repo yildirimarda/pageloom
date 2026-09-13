@@ -23,7 +23,7 @@ def test_llm_content_generator_init_explicit_params():
 
 
 def test_llm_content_generator_generate_requires_openai():
-    gen = LLMContentGenerator()
+    gen = LLMContentGenerator(api_key="test-key")
     import sys
 
     original_modules = dict(sys.modules)
@@ -143,13 +143,54 @@ def test_provider_selection_via_env():
         assert gen.provider_name == "anthropic"
 
 
+def test_missing_openai_key_raises_clear_startup_error():
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(RuntimeError, match="LLM provider 'openai' selected but API key is missing"),
+    ):
+        LLMContentGenerator(provider="openai")
+
+
+def test_missing_anthropic_key_raises_clear_startup_error():
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(RuntimeError, match="LLM provider 'anthropic' selected but API key is missing"),
+    ):
+        LLMContentGenerator(provider="anthropic")
+
+
+def test_missing_openrouter_key_raises_clear_startup_error():
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(RuntimeError, match="LLM provider 'openrouter' selected but API key is missing"),
+    ):
+        LLMContentGenerator(provider="openrouter")
+
+
+def test_provider_credentials_read_from_env_vars():
+    with patch.dict(
+        "os.environ",
+        {
+            "OPENAI_API_KEY": "openai-env",
+            "ANTHROPIC_API_KEY": "anthropic-env",
+            "OPENROUTER_API_KEY": "openrouter-env",
+        },
+    ):
+        gen_openai = LLMContentGenerator(provider="openai")
+        assert gen_openai.api_key == "openai-env"
+        gen_anthropic = LLMContentGenerator(provider="anthropic")
+        assert gen_anthropic.api_key == "anthropic-env"
+        gen_openrouter = LLMContentGenerator(provider="openrouter")
+        assert gen_openrouter.api_key == "openrouter-env"
+
+
 def test_unknown_provider_raises():
     with pytest.raises(ValueError, match="Unknown LLM provider"):
         LLMContentGenerator(provider="unknown")
 
 
 def test_llm_content_generator_generate_returns_correct_length():
-    gen = LLMContentGenerator()
+    gen = LLMContentGenerator(api_key="test-key")
     mock_openai_module = MagicMock()
     mock_client = MagicMock()
     mock_response = MagicMock()

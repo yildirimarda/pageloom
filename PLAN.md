@@ -28,7 +28,7 @@
 - [x] Add an optional LLM-based content-list generator to supply arbitrary N page topics/words when the requested page count exceeds the built-in alphabet list (ties directly into the `--pages N` feature once pages > 26)
 - [x] Support multiple LLM providers (OpenAI, Anthropic, OpenRouter) for the content-list generator behind 
       a single provider-agnostic interface, selectable via a config value or CLI flag (e.g. `--llm-provider`)
-- [ ] Read provider credentials from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, 
+- [x] Read provider credentials from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, 
       `OPENROUTER_API_KEY`), with a clear startup error if the selected provider's key is missing
 - [ ] Add a per-provider default model setting (e.g. config values for OpenAI/Anthropic/OpenRouter model IDs) 
       so the model used isn't hardcoded and can be swapped without code changes
