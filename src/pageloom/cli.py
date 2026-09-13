@@ -83,6 +83,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=["standard", "object_name", "themed_scene"],
         help="Page format.",
     )
+    generate_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Regenerate raw illustrations even if cached.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -113,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         contents=contents,
         output_path=args.output,
         page_format=args.format,
+        force=args.force,
     )
     print(f"Generated {len(contents)} page(s) -> {result}")
     return 0
