@@ -83,6 +83,16 @@ def test_guard_description_flows_to_classifier():
     assert guard.example_structure.get("content_pattern") == "object_name_pair"
 
 
+def test_guard_description_flows_to_generated_image_classifier():
+    img = Image.new("RGB", (800, 400), color="green")
+    guard = ConsistencyGuard(example_image=img, description="object name pair")
+    generated = Image.new("RGB", (800, 400), color="yellow")
+    result = guard.verify(generated)
+    # Description-based pattern should flow through to the generated image
+    assert result["details"].get("structure_match") is True
+    assert guard.example_structure.get("content_pattern") == "object_name_pair"
+
+
 def test_guard_structural_conformance_content_pattern_in_details():
     img = Image.new("RGB", (400, 400), color="blue")
     guard = ConsistencyGuard(example_image=img)
