@@ -192,7 +192,7 @@
       API error end-to-end through `pageloom generate` and observing a clean, informative, non-fatal
       exit (see manual verification during this session; not yet captured as a checked-in
       `tests/test_cli.py` case -- see the item below).
-- [ ] Add the "model rejects/ignores the image" scenario as an actual checked-in regression test in
+- [x] Add the "model rejects/ignores the image" scenario as an actual checked-in regression test in
       `tests/test_cli.py` (e.g. `test_cli_vision_model_rejects_image_falls_back_gracefully`), simulating
       a provider exception like `"This model does not support image inputs"` and asserting the CLI still
       exits 0, prints the fallback warning, and completes generation via the heuristic path. This exact
