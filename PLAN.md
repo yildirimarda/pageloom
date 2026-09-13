@@ -44,7 +44,7 @@
 - [x] Refactor pipeline to infer layout and style directly from any example page instead of hardcoding letter/word templates
 - [x] Add support for alternate page formats such as a photo-realistic object with its name and themed scene pages
 - [x] Create end-to-end integration test that feeds one example page and generates a matching multi-page PDF
-- [ ] Implement an explicit page-structure classifier: given an example page (image + description), 
+- [x] Implement an explicit page-structure classifier: given an example page (image + description), 
       determine its content pattern — e.g. single letter+word+illustration, object-name pairs, 
       multi-item labeled scene, matching/puzzle grid — not just its color palette and typography
 - [ ] Extend the extracted template to capture structural attributes: number of illustrated elements 
