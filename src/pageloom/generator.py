@@ -6,6 +6,7 @@ import torch
 from diffusers import StableDiffusionPipeline
 from PIL import Image
 
+from pageloom import settings
 from pageloom.license_check import LicenseVerifier
 
 
@@ -14,17 +15,20 @@ class IllustrationGenerator:
 
     def __init__(
         self,
-        model_id: str = "runwayml/stable-diffusion-v1-5",
+        model_id: str | None = None,
         device: str | None = None,
         torch_dtype: torch.dtype | None = None,
         verify_license: bool = True,
         license_context: str = "book intended for sale",
     ) -> None:
-        self.model_id = model_id
+        self.model_id = model_id if model_id is not None else settings.get_model_id()
         self.verify_license = verify_license
         self.license_context = license_context
         if device is None:
-            if torch.cuda.is_available():
+            env_device = settings.get_device()
+            if env_device is not None:
+                device = env_device
+            elif torch.cuda.is_available():
                 device = "cuda"
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 device = "mps"
@@ -33,19 +37,21 @@ class IllustrationGenerator:
         self.device = device
         self.torch_dtype = torch_dtype or torch.float32
         if verify_license:
-            verifier = LicenseVerifier(model_id=model_id)
+            verifier = LicenseVerifier(model_id=self.model_id)
             verifier.verify(
                 intended_use="commercial",
                 context=license_context,
             )
+        cache_dir = settings.get_hf_cache_dir()
         try:
             self.pipeline = StableDiffusionPipeline.from_pretrained(
-                model_id,
+                self.model_id,
                 torch_dtype=self.torch_dtype,
+                cache_dir=cache_dir,
             )
         except Exception as exc:
             raise RuntimeError(
-                f"Failed to load Stable Diffusion model '{model_id}': {exc}"
+                f"Failed to load Stable Diffusion model '{self.model_id}': {exc}"
             ) from exc
         self.pipeline = self.pipeline.to(self.device)
         # Attention slicing enabled consistently for lower memory usage
