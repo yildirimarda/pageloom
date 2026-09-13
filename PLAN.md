@@ -67,4 +67,5 @@
 
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
+- [ ] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain
 <!-- work found while building; appended by the agent -->

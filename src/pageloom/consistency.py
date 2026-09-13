@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from pageloom.page_structure_classifier import PageStructureClassifier
 from pageloom.style_extractor import VisualStyleExtractor
 
 
@@ -32,10 +33,28 @@ class ConsistencyGuard:
             extractor = VisualStyleExtractor(example_image)
             self.example_style = extractor.extract()
             self.example_image = extractor.image
+            self.classifier = PageStructureClassifier(source=example_image)
         elif example_style is not None:
             self.example_style = example_style
+            self.classifier = PageStructureClassifier(
+                description=str(example_style.get("composition", {}).get("layout_type", ""))
+            )
         else:
             raise ValueError("Provide either example_image or example_style.")
+        if not hasattr(self, "example_image"):
+            self.example_image = None
+        # Derive structural reference from example
+        if self.example_image is not None:
+            self.example_structure = self.classifier.classify(self.example_image)
+        else:
+            # If initialized with style only, build a synthetic structure reference
+            comp = self.example_style.get("composition", {})
+            self.example_structure = {
+                "content_pattern": comp.get("layout_type", "single_letter_word_illustration"),
+                "element_count": 1,
+                "arrangement": "centered",
+                "text_image_relationship": "label_per_image",
+            }
 
     def verify(self, generated_image: str | Path | Image.Image) -> dict:
         """Compare a generated page to the example and return a result."""
@@ -121,7 +140,57 @@ class ConsistencyGuard:
         if not dim_ok:
             issues.append("Page dimensions differ from example.")
 
-        consistent = palette_match and typo_ok and layout_ok and dim_ok
+        # Structural conformance (page-structure classifier output)
+        generated_structure = self.classifier.classify(image)
+        example_structure = getattr(self, "example_structure", {})
+        structure_ok = True
+        structure_issues: list[str] = []
+        # Compare content pattern
+        example_pattern = example_structure.get("content_pattern")
+        generated_pattern = generated_structure.get("content_pattern")
+        if example_pattern and generated_pattern and example_pattern != generated_pattern:
+            structure_ok = False
+            structure_issues.append(
+                f"Content pattern mismatch: {example_pattern} vs {generated_pattern}."
+            )
+        # Compare element count within a reasonable tolerance
+        example_elements = example_structure.get("element_count", 1)
+        generated_elements = generated_structure.get("element_count", 1)
+        if (
+            isinstance(example_elements, (int, float))
+            and isinstance(generated_elements, (int, float))
+            and abs(int(generated_elements) - int(example_elements)) > 1
+        ):
+            structure_ok = False
+            structure_issues.append(
+                f"Element count differs: {example_elements} vs {generated_elements}."
+            )
+        # Compare arrangement
+        example_arrangement = example_structure.get("arrangement")
+        generated_arrangement = generated_structure.get("arrangement")
+        if (
+            example_arrangement
+            and generated_arrangement
+            and example_arrangement != generated_arrangement
+        ):
+            structure_ok = False
+            structure_issues.append(
+                f"Spatial arrangement mismatch: {example_arrangement} vs {generated_arrangement}."
+            )
+        # Compare text-to-image relationship
+        example_rel = example_structure.get("text_image_relationship")
+        generated_rel = generated_structure.get("text_image_relationship")
+        if example_rel and generated_rel and example_rel != generated_rel:
+            structure_ok = False
+            structure_issues.append(
+                f"Text-to-image relationship mismatch: {example_rel} vs {generated_rel}."
+            )
+
+        details["structure_match"] = structure_ok
+        details["structure_issues"] = structure_issues
+        issues.extend(structure_issues)
+
+        consistent = palette_match and typo_ok and layout_ok and dim_ok and structure_ok
         details["consistent"] = consistent
         details["issues"] = issues
         return {

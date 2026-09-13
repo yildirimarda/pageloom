@@ -67,3 +67,19 @@ def test_guard_verify_different_image():
     result = guard.verify(different)
     assert result["consistent"] is False
     assert len(result["issues"]) > 0
+
+
+def test_guard_structural_conformance_matches():
+    img = Image.new("RGB", (400, 400), color="blue")
+    guard = ConsistencyGuard(example_image=img)
+    result = guard.verify(img)
+    assert result["details"]["structure_match"] is True
+    assert "structure_issues" in result["details"]
+
+
+def test_guard_structural_conformance_content_pattern_in_details():
+    img = Image.new("RGB", (400, 400), color="blue")
+    guard = ConsistencyGuard(example_image=img)
+    result = guard.verify(img)
+    assert "structure_match" in result["details"]
+    assert "content_pattern" in guard.example_structure
