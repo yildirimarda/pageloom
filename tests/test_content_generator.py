@@ -154,7 +154,9 @@ def test_missing_openai_key_raises_clear_startup_error():
 def test_missing_anthropic_key_raises_clear_startup_error():
     with (
         patch.dict("os.environ", {}, clear=True),
-        pytest.raises(RuntimeError, match="LLM provider 'anthropic' selected but API key is missing"),
+        pytest.raises(
+            RuntimeError, match="LLM provider 'anthropic' selected but API key is missing"
+        ),
     ):
         LLMContentGenerator(provider="anthropic")
 
@@ -162,7 +164,9 @@ def test_missing_anthropic_key_raises_clear_startup_error():
 def test_missing_openrouter_key_raises_clear_startup_error():
     with (
         patch.dict("os.environ", {}, clear=True),
-        pytest.raises(RuntimeError, match="LLM provider 'openrouter' selected but API key is missing"),
+        pytest.raises(
+            RuntimeError, match="LLM provider 'openrouter' selected but API key is missing"
+        ),
     ):
         LLMContentGenerator(provider="openrouter")
 

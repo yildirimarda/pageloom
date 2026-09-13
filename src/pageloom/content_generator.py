@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
+from pageloom import settings
+
 
 class LLMProvider(Protocol):
     """Provider-agnostic interface for LLM APIs."""
@@ -29,7 +31,7 @@ class OpenAIProvider:
         self.api_key = (
             api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("PAGELOOM_LLM_API_KEY")
         )
-        self.model = model or os.environ.get("PAGELOOM_LLM_MODEL", "gpt-4o-mini")
+        self.model = model or settings.get_openai_llm_model()
         self.endpoint = endpoint or os.environ.get("PAGELOOM_LLM_ENDPOINT")
 
     def generate_content(
@@ -72,7 +74,7 @@ class AnthropicProvider:
         self.api_key = (
             api_key or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("PAGELOOM_LLM_API_KEY")
         )
-        self.model = model or os.environ.get("ANTHROPIC_LLM_MODEL", "claude-3-haiku-20240307")
+        self.model = model or settings.get_anthropic_llm_model()
 
     def generate_content(
         self,
@@ -114,7 +116,7 @@ class OpenRouterProvider:
             or os.environ.get("OPENROUTER_API_KEY")
             or os.environ.get("PAGELOOM_LLM_API_KEY")
         )
-        self.model = model or os.environ.get("OPENROUTER_LLM_MODEL", "openai/gpt-4o-mini")
+        self.model = model or settings.get_openrouter_llm_model()
         # Default OpenRouter endpoint if not specified
         default_endpoint = endpoint or os.environ.get("PAGELOOM_LLM_ENDPOINT")
         self.endpoint = default_endpoint or "https://openrouter.ai/api/v1"
