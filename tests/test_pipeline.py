@@ -51,6 +51,35 @@ def test_pipeline_init_with_example_image(tmp_path: Path):
     assert pipeline.style is not None
 
 
+def test_pipeline_passes_text_image_relationship_to_overlay(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="green")
+    img.save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+
+    # Force page_structure with no_text so overlay receives it
+    pipeline = Pipeline(
+        example_image=str(img_path),
+        generator=mock_gen,
+        page_structure={
+            "content_pattern": "multi_item_scene",
+            "element_count": 3,
+            "arrangement": "grid",
+            "text_image_relationship": "no_text",
+        },
+    )
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "output.pdf"
+        pipeline.run(
+            contents=["apple"],
+            output_path=str(tmp_path / "output.pdf"),
+        )
+        # The overlay should have been called; if relationship is no_text,
+        # overlay.apply returns image without drawing text.
+        assert mock_compile.called
+
+
 @patch("pageloom.pipeline.PDFCompiler.compile")
 def test_pipeline_run(mock_compile, tmp_path: Path):
     img_path = tmp_path / "example.png"

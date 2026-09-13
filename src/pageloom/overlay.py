@@ -49,6 +49,40 @@ class TextOverlay:
             self.text_position = (left_margin + 20, top_margin + 20)
         self._font = None
 
+    def _label_positions(
+        self,
+        width: int,
+        height: int,
+        count: int,
+        arrangement: str | None = None,
+    ) -> list[tuple[int, int]]:
+        """Compute positions for multiple labels based on arrangement."""
+        if arrangement == "grid":
+            cols = max(1, int(count**0.5))
+            rows = max(1, (count + cols - 1) // cols)
+            cell_w = width // cols
+            cell_h = height // rows
+            positions = []
+            for i in range(count):
+                r, c = i // cols, i % cols
+                x = c * cell_w + cell_w // 4
+                y = r * cell_h + cell_h // 4
+                positions.append((x, y))
+            return positions
+        elif arrangement == "row":
+            step = width // max(1, count)
+            y = height // 2
+            return [(i * step + step // 4, y) for i in range(count)]
+        elif arrangement == "column":
+            step = height // max(1, count)
+            x = width // 4
+            return [(x, i * step + step // 4) for i in range(count)]
+        else:
+            # Centered: spread evenly horizontally near bottom
+            step = max(50, width // max(1, count))
+            y = height - int(height * 0.15)
+            return [(i * step + step // 4, y) for i in range(count)]
+
     def _get_font(self, size: int):
         try:
             if self.font_path:
@@ -62,9 +96,32 @@ class TextOverlay:
         image: Image.Image,
         text: str = "",
         page_format: str = "standard",
+        text_image_relationship: str | None = None,
+        element_count: int | None = None,
+        arrangement: str | None = None,
     ) -> Image.Image:
         overlay_image = image.copy()
+        # Design decision: `no_text` suppresses all text overlay; `multiple_labels`
+        # splits content by commas and places each label individually based on
+        # arrangement; full multi-sub-image compositing remains future work.
+        if text_image_relationship == "no_text":
+            return overlay_image
+
         draw = ImageDraw.Draw(overlay_image)
+
+        if text_image_relationship == "multiple_labels":
+            labels = [label.strip() for label in text.split(",") if label.strip()]
+            if not labels:
+                labels = [text] if text else []
+            # Place labels based on arrangement and element count
+            count = element_count or len(labels) or 1
+            positions = self._label_positions(
+                image.width, image.height, len(labels) or count, arrangement
+            )
+            font = self._get_font(self.text_size)
+            for label, (lx, ly) in zip(labels, positions):
+                draw.text((lx, ly), label, fill=self.text_color, font=font)
+            return overlay_image
 
         if text:
             font = self._get_font(self.text_size)
