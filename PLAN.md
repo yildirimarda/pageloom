@@ -155,7 +155,7 @@
       `IllustrationGenerator.generate()` call per element) and compositing them with multiple
       `TextOverlay` placements on a single canvas, rather than the current one-image-one-label-per-page
       architecture -- a real design decision, not a small tweak.
-- [ ] Add a small cache for vision-analysis results (keyed on a hash of the example image bytes +
+- [x] Add a small cache for vision-analysis results (keyed on a hash of the example image bytes +
       description), mirroring the existing raw-illustration cache in `Pipeline.run()`
       (`.pageloom_raw/`). Right now every CLI invocation re-calls the vision API even when iterating
       repeatedly against the same example image, which burns through free-tier rate limits
