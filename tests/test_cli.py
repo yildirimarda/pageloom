@@ -568,6 +568,47 @@ def test_cli_vision_unavailable_falls_back_gracefully(tmp_path: Path, capsys):
         assert "vision analysis unavailable" in captured.err.lower()
 
 
+def test_cli_vision_model_rejects_image_falls_back_gracefully(tmp_path: Path, capsys):
+    """If the vision model rejects/ignores the image (e.g. provider exception),
+    the CLI should exit 0, print the fallback warning, and complete generation
+    via the heuristic path."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_vision_cls.return_value = mock_instance
+        mock_instance.analyze.side_effect = VisionAnalysisError(
+            "This model does not support image inputs"
+        )
+        mock_pipeline.return_value = mock_instance
+        mock_pipeline_instance = MagicMock()
+        mock_pipeline.return_value = mock_pipeline_instance
+        mock_pipeline_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "3",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "vision-based page analysis failed" in captured.err
+        assert "This model does not support image inputs" in captured.err
+        mock_pipeline.assert_called_once()
+        mock_pipeline_instance.run.assert_called_once()
+
+
 def test_cli_check_vision_passes(tmp_path: Path):
     """check-vision should report PASS when vision provider and analysis work."""
     img_path = tmp_path / "example.png"
