@@ -52,6 +52,33 @@ def test_get_hf_cache_dir_page_loom_takes_precedence(monkeypatch):
     assert settings.get_hf_cache_dir() == "/tmp/page_cache"
 
 
+def test_get_openai_llm_model_default():
+    assert settings.get_openai_llm_model() == "gpt-4o-mini"
+
+
+def test_get_openai_llm_model_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_LLM_MODEL", "custom-openai-model")
+    assert settings.get_openai_llm_model() == "custom-openai-model"
+
+
+def test_get_anthropic_llm_model_default():
+    assert settings.get_anthropic_llm_model() == "claude-3-haiku-20240307"
+
+
+def test_get_anthropic_llm_model_from_env(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_LLM_MODEL", "custom-claude-model")
+    assert settings.get_anthropic_llm_model() == "custom-claude-model"
+
+
+def test_get_openrouter_llm_model_default():
+    assert settings.get_openrouter_llm_model() == "openai/gpt-4o-mini"
+
+
+def test_get_openrouter_llm_model_from_env(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_LLM_MODEL", "custom-openrouter-model")
+    assert settings.get_openrouter_llm_model() == "custom-openrouter-model"
+
+
 def test_illustration_generator_uses_env_model_id(monkeypatch):
     monkeypatch.setenv("PAGELOOM_MODEL_ID", "env/model")
     with (
