@@ -50,7 +50,7 @@
 - [x] Extend the extracted template to capture structural attributes: number of illustrated elements 
       per page, their spatial arrangement, and the text-to-image relationship (one label per image, 
       multiple labels, no text, etc.)
-- [ ] Route the LLM content generator through the detected page structure, so generated content matches 
+- [x] Route the LLM content generator through the detected page structure, so generated content matches 
       the *type* of page found (e.g. object names for a naming-grid page, single words for a letter page) 
       instead of always assuming letter+word format
 - [ ] Add a test with two structurally different example pages (e.g. an alphabet page vs. an 

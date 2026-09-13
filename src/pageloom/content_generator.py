@@ -245,15 +245,48 @@ class LLMContentGenerator:
         self,
         count: int,
         theme: str = "children's book alphabet words",
+        page_structure: dict | None = None,
     ) -> list[str]:
-        """Generate `count` content words/topics via LLM."""
+        """Generate `count` content words/topics via LLM, routed through detected page structure."""
         if count < 1:
             raise ValueError("count must be at least 1")
-        prompt = (
-            f"Generate exactly {count} simple children's book word or phrase topics "
-            f"about '{theme}'. Return only a comma-separated list with no numbering, "
-            f"no explanation, and no extra punctuation. Example format: Apple, Banana, Cherry"
+
+        # Route through detected page structure so generated content matches the page type
+        content_pattern = (page_structure or {}).get(
+            "content_pattern", "single_letter_word_illustration"
         )
+        element_count = (page_structure or {}).get("element_count", 1)
+        arrangement = (page_structure or {}).get("arrangement", "centered")
+
+        if content_pattern == "object_name_pair":
+            prompt_template = (
+                f"Generate exactly {count} simple children's book object names (single objects like Cat, Dog, Tree). "
+                f"Each item should be a single object name suitable for a naming page with a photo-realistic illustration and its name label. "
+                f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
+                f"Example format: Cat, Dog, Tree"
+            )
+        elif content_pattern == "multi_item_scene":
+            prompt_template = (
+                f"Generate exactly {count} themed scene descriptions for a children's book page with multiple labeled items "
+                f"(e.g., {element_count} items arranged in a {arrangement} layout). Each item should describe a group or scene theme. "
+                f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
+                f"Example format: Picnic in the Park, Garden Party, Forest Adventure"
+            )
+        elif content_pattern == "single_letter_word_illustration":
+            prompt_template = (
+                f"Generate exactly {count} simple children's book word or phrase topics about '{theme}'. "
+                f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
+                f"Example format: Apple, Banana, Cherry"
+            )
+        else:
+            # Fallback to generic letter/word style for unknown patterns
+            prompt_template = (
+                f"Generate exactly {count} simple children's book word or phrase topics about '{theme}'. "
+                f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
+                f"Example format: Apple, Banana, Cherry"
+            )
+
+        prompt = prompt_template
         try:
             raw = self.provider.generate_content(
                 prompt=prompt,
