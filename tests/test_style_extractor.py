@@ -67,3 +67,15 @@ def test_extract_full():
     assert "typography" in result
     assert "composition" in result
     assert isinstance(result["palette"], list)
+
+
+def test_extract_structural_attributes():
+    img = Image.new("RGB", (512, 512), color="blue")
+    extractor = VisualStyleExtractor(img)
+    result = extractor.extract()
+    assert "structural_attributes" in result
+    attrs = result["structural_attributes"]
+    assert "element_count" in attrs
+    assert isinstance(attrs["element_count"], int)
+    assert "arrangement" in attrs
+    assert "text_image_relationship" in attrs

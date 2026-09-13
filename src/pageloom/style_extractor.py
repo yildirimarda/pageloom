@@ -8,6 +8,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from pageloom.page_structure_classifier import PageStructureClassifier
+
 
 class VisualStyleExtractor:
     """Analyze an example page image for style properties."""
@@ -93,10 +95,21 @@ class VisualStyleExtractor:
             "page_dimensions": {"width": width, "height": height},
         }
 
+    def extract_structure(self) -> dict:
+        """Infer structural content pattern and illustrated element count."""
+        classifier = PageStructureClassifier(source=self.image)
+        return classifier.classify()
+
     def extract(self) -> dict:
         """Run full extraction and return a combined style profile."""
+        structure = self.extract_structure()
         return {
             "palette": self.extract_palette(),
             "typography": self.extract_typography(),
             "composition": self.extract_composition(),
+            "structural_attributes": {
+                "element_count": structure.get("element_count"),
+                "arrangement": structure.get("arrangement"),
+                "text_image_relationship": structure.get("text_image_relationship"),
+            },
         }
