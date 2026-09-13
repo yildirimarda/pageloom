@@ -15,13 +15,19 @@ docker build -t pageloom .
 # Run with a local example image and generated output mounted
 mkdir -p outputs
 # The container entrypoint runs python -m pageloom.pipeline
-docker run --rm -v $(pwd)/example.png:/app/example.png -v $(pwd)/outputs:/app/outputs pageloom
+# Mount a persistent volume for Hugging Face weights so downloads are cached:
+docker run --rm \
+  -v $(pwd)/example.png:/app/example.png \
+  -v $(pwd)/outputs:/app/outputs \
+  -v $(pwd)/.cache/huggingface:/root/.cache/huggingface \
+  pageloom
 ```
 
 Notes:
 - The same `Dockerfile` runs identically on CPU or CUDA; set `CUDA_VISIBLE_DEVICES` as needed.
 - The container uses `python:3.12-slim` and installs `gcc`, `libjpeg-dev`, and `zlib1g-dev` for Pillow.
 - Dependencies are installed via `uv sync --no-dev` from `pyproject.toml` and `uv.lock`.
+- **First-time model download / caching:** The image does not bake in model weights (to keep the image small). On first `docker run`, weights are downloaded into `/root/.cache/huggingface` (set by `HF_HOME`). Mount a host volume (`-v ...:/root/.cache/huggingface`) to persist weights across container restarts and avoid re-downloading on every run.
 
 ### Local (plain Python or uv)
 
@@ -64,9 +70,11 @@ Backend configuration (same code on all platforms):
 
 Environment variables you can set:
 
-- `HF_HOME` — Hugging Face cache/home directory (useful in Docker to persist model weights)
+- `HF_HOME` / `PAGELOOM_HF_CACHE_DIR` — Hugging Face cache/home directory (useful in Docker to persist model weights). The Dockerfile sets `HF_HOME=/root/.cache/huggingface` by default; mount this path as a volume.
+- `PAGELOOM_MODEL_ID` — override the default Stable Diffusion model (`runwayml/stable-diffusion-v1-5`).
+- `PAGELOOM_DEVICE` — override the auto-detected device (`cpu`, `cuda`, `mps`).
+- `PAGELOOM_OUTPUT_DIR` — default output directory for generated PDFs.
 - `CUDA_VISIBLE_DEVICES` — restrict CUDA devices in Docker
-- `MODEL_ID` — can be referenced in custom scripts to override the default model
 
 ## CLI Usage Examples
 

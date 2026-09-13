@@ -20,6 +20,13 @@ RUN uv sync --no-dev
 COPY src/ ./src/
 RUN uv pip install -e . --no-deps
 
+# Persist Hugging Face model weights across container restarts.
+# Mount a host volume to avoid re-downloading weights on every run:
+#   docker run ... -v ~/.cache/huggingface:/root/.cache/huggingface pageloom
+ENV HF_HOME=/root/.cache/huggingface
+RUN mkdir -p /root/.cache/huggingface
+VOLUME ["/root/.cache/huggingface"]
+
 # The same code runs on CPU or CUDA with no behavioral differences
 ENV PYTHONUNBUFFERED=1
 ENV CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-}
