@@ -68,4 +68,5 @@
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
 - [ ] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain
+- [ ] Pipeline and ConsistencyGuard pass images to PageStructureClassifier without descriptions, so image-only inference misses description-based patterns like object_name_pair; descriptions need to flow through the extractor/guard
 <!-- work found while building; appended by the agent -->
