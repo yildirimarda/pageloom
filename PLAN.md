@@ -197,7 +197,7 @@
       a provider exception like `"This model does not support image inputs"` and asserting the CLI still
       exits 0, prints the fallback warning, and completes generation via the heuristic path. This exact
       scenario was manually verified during this planning session but is not yet locked in as a test.
-- [ ] Make the fallback warning more specifically actionable when the failure looks like a
+- [x] Make the fallback warning more specifically actionable when the failure looks like a
       vision-capability mismatch (as opposed to a rate limit, timeout, or bad key, which already get
       distinct, clear messages via `_classify_provider_error`). Detect common phrasings in the
       underlying error (e.g. containing "image", "vision", "multimodal", "does not support") and print
