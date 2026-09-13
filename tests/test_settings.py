@@ -79,6 +79,43 @@ def test_get_openrouter_llm_model_from_env(monkeypatch):
     assert settings.get_openrouter_llm_model() == "custom-openrouter-model"
 
 
+def test_get_vision_provider_default():
+    assert settings.get_vision_provider() == "openrouter"
+
+
+def test_get_vision_provider_from_dedicated_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_VISION_PROVIDER", "anthropic")
+    assert settings.get_vision_provider() == "anthropic"
+
+
+def test_get_vision_provider_falls_back_to_llm_provider_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_LLM_PROVIDER", "openai")
+    assert settings.get_vision_provider() == "openai"
+
+
+def test_get_vision_provider_dedicated_env_takes_precedence(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("PAGELOOM_VISION_PROVIDER", "anthropic")
+    assert settings.get_vision_provider() == "anthropic"
+
+
+def test_get_openai_vision_model_default():
+    assert settings.get_openai_vision_model() == "gpt-4o-mini"
+
+
+def test_get_anthropic_vision_model_default():
+    assert settings.get_anthropic_vision_model() == "claude-3-haiku-20240307"
+
+
+def test_get_openrouter_vision_model_default():
+    assert settings.get_openrouter_vision_model() == "openrouter/free"
+
+
+def test_get_openrouter_vision_model_from_env(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_VISION_MODEL", "some/vision-model:free")
+    assert settings.get_openrouter_vision_model() == "some/vision-model:free"
+
+
 def test_illustration_generator_uses_env_model_id(monkeypatch):
     monkeypatch.setenv("PAGELOOM_MODEL_ID", "env/model")
     with (

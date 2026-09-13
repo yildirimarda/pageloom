@@ -100,7 +100,9 @@ The CLI wrapper (`pageloom generate --pages N`) supports:
 
 - `--use-llm` — enable LLM-based content generation when `--pages` exceeds the available built-in list.
 - `--llm-provider {openai,anthropic,openrouter}` — override the provider selected by `PAGELOOM_LLM_PROVIDER`.
-- `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). This is passed straight through to `PageStructureClassifier` and `Pipeline`, so structural routing works from the CLI and isn't limited to pure image-size heuristics. Without it, the CLI falls back to image heuristics alone, which can misclassify structures like `object_name_pair` that heuristics can't distinguish from a plain image.
+- `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). This is passed straight through to structure detection and `Pipeline`. Providing it is treated as an explicit override that **skips automatic vision analysis** (see below) — useful if you already know the page type and want to avoid the network call.
+- `--no-vision` — disable automatic vision-based page-structure analysis (see next section) and fall back to the image-size heuristic instead.
+- `--vision-provider {openai,anthropic,openrouter}` — provider used for automatic vision analysis (default: `openrouter`, free tier).
 
 Example:
 
@@ -128,28 +130,65 @@ These can be overridden per provider through the environment variables above or 
 
 If an LLM API call fails — for example due to a rate limit, timeout, invalid key, or truncated response — `LLMContentGenerator.generate()` raises a `RuntimeError` with a message identifying the provider and the specific failure type (rate limit, timeout, invalid/missing key, or insufficient content). The CLI catches these and prints an error to stderr (`Error: LLM content generation failed: ...`) rather than silently defaulting to the built-in content list.
 
+## Automatic Visual Page-Structure Analysis (Free by Default)
+
+By default — when you don't pass `--description` or `--no-vision` — PageLoom sends the example page image itself to a vision-capable (multimodal) LLM and asks it to describe the page's structure: what type of page it is, how many illustrated elements it has, how they're arranged, and what the text/image relationship looks like. This means PageLoom can recognize **any** page type — numbers, digits, word-image matching grids, shapes, colors, or anything else — without you writing a description, and without being limited to a fixed list of hardcoded categories.
+
+**Why this needs a separate model.** The `IllustrationGenerator` (Stable Diffusion via `diffusers`) used elsewhere in this pipeline is a text-to-image *generation* model: given a text prompt, it produces a new image. It has no ability to look at an existing image and describe what's in it — that capability doesn't exist in a generation-only model, regardless of which Stable Diffusion checkpoint is configured. Analyzing the example page therefore requires a genuinely multimodal (vision-capable) model, which is what `PageVisionAnalyzer` (`src/pageloom/vision.py`) calls out to via the same provider abstraction used by `LLMContentGenerator`.
+
+**Free by default.** The default provider for vision analysis is OpenRouter (override with `PAGELOOM_VISION_PROVIDER` or `--vision-provider`), using OpenRouter's `openrouter/free` auto-router as the default model (`OPENROUTER_VISION_MODEL`). This router selects a free, zero-cost model that supports image understanding — OpenRouter's free model roster changes over time, so the auto-router avoids hardcoding a specific model ID that might get retired. You only need an `OPENROUTER_API_KEY` (free to create, no credit card required) for this to work; see [openrouter.ai](https://openrouter.ai) to get one. OpenAI (`gpt-4o-mini`, vision-capable) and Anthropic (`claude-3-haiku-20240307`, vision-capable) are also supported if you'd rather use those.
+
+**Graceful, non-fatal fallback.** If vision analysis is unavailable (no API key configured) or fails (rate limit, timeout, malformed response), PageLoom prints a warning to stderr and falls back automatically to the old image-size heuristic (or your `--description`, if you provide one) rather than aborting the run. Vision analysis is a best-effort upgrade, not a hard requirement.
+
+**How it works internally:** `PageVisionAnalyzer.analyze()` base64-encodes the example image, sends it alongside a prompt asking for a JSON structure description, and parses the response into a dict shaped like:
+
+```json
+{
+  "content_pattern": "number_count_matching",
+  "content_type_description": "a page pairing a printed number with a matching count of illustrated objects",
+  "element_count": 3,
+  "arrangement": "row",
+  "text_image_relationship": "label_per_image",
+  "example_content_items": ["3 ducks"]
+}
+```
+
+The `content_pattern` here is not restricted to the three legacy values below — it can be any short identifier the vision model comes up with. `content_type_description` and `example_content_items` (the actual items visible on the example page) are then used by `LLMContentGenerator.generate()` to produce new content matching that exact page type — e.g., `"4 balloons"`, `"5 stars"` for a number-counting page — via a generic, open-ended prompt rather than one of the three hardcoded branches. `ConsistencyGuard` also accepts a `vision_analyzer` so generated pages can be checked against the example using the same open-ended structure, not just the heuristic categories.
+
+**Vision environment variables:**
+
+- `PAGELOOM_VISION_PROVIDER` — provider used for automatic vision analysis (`openai`, `anthropic`, `openrouter`; falls back to `PAGELOOM_LLM_PROVIDER` if unset, then defaults to `openrouter`).
+- `OPENROUTER_VISION_MODEL` — OpenRouter vision model ID (default: `openrouter/free`, the free auto-router).
+- `OPENAI_VISION_MODEL` — OpenAI vision model ID (default: `gpt-4o-mini`).
+- `ANTHROPIC_VISION_MODEL` — Anthropic vision model ID (default: `claude-3-haiku-20240307`).
+- API keys are the same ones used for content generation (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or the generic `PAGELOOM_LLM_API_KEY`).
+
 ## Supported Page Structures
 
-`PageStructureClassifier` determines the structural content pattern of an example page. Three structures are currently supported:
+`PageStructureClassifier` determines the structural content pattern of an example page using image-size heuristics and description keywords — this is the fallback path used when vision analysis is disabled or unavailable. Three structures are supported by this heuristic path:
 
 - `single_letter_word_illustration` — a single letter/word with an illustration (default for standard alphabet-style pages). Content is routed through a single-item centered layout (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
 - `object_name_pair` — a photo-realistic object with its name label (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
 - `multi_item_scene` — a themed scene with multiple labeled items, such as a grid or puzzle (`element_count` inferred from image width, `arrangement: grid`, `text_image_relationship: label_per_image`).
 
-The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`). Additionally, `Pipeline.run()` derives the default `page_format` (`object_name` or `themed_scene`) from the detected structure when `page_format="standard"` is not explicitly overridden.
+When vision analysis is used instead (the default), `content_pattern` is open-ended and not limited to these three values — see the section above.
+
+The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`, or whatever `content_type_description` says for a vision-derived pattern). Additionally, `Pipeline.run()` derives the default `page_format` (`object_name` or `themed_scene`) from the detected structure when `page_format="standard"` is not explicitly overridden (other/vision-derived patterns keep the generic `standard` format).
 
 ### Adding a New Structure Type
 
-To add a new page structure:
+With vision analysis enabled (the default), you generally **don't need to add anything** for a new page type — the vision model describes any page type in plain language via `content_type_description`, and `LLMContentGenerator.generate()` already has a generic prompt path that uses that description directly (see "Automatic Visual Page-Structure Analysis" above).
+
+The steps below are only needed to add a new *hardcoded* pattern to the heuristic fallback path (`PageStructureClassifier`), which matters for `--no-vision` runs or when no vision provider is configured:
 
 1. Update `PageStructureClassifier.classify()` in `src/pageloom/page_structure_classifier.py` to detect the new pattern (e.g., from the image description or visual heuristics) and return a new `content_pattern` value along with the appropriate `element_count`, `arrangement`, and `text_image_relationship`.
-2. Add a new prompt branch in `LLMContentGenerator.generate()` in `src/pageloom/content_generator.py` for the new `content_pattern`, defining how content words/topics should be generated for that structure.
+2. Add a new prompt branch in `LLMContentGenerator.generate()` in `src/pageloom/content_generator.py` for the new `content_pattern` (only needed if you want a hand-tuned prompt rather than relying on the generic `content_type_description` path).
 3. Update this README to document the new structure and its structural attributes.
 4. Add a test in `tests/test_content_generator.py` verifying the new pattern produces content with the correct request shape (similar to `test_llm_content_generator_routed_by_object_name_pair`).
 
 ### Description-Based Pattern Inference
 
-The pipeline, extractor, classifier, and consistency guard all accept an optional `description` string. When a page is described (e.g., `"object name pair"` or `"alphabet letter word"`), the description guides `PageStructureClassifier` to infer the correct content pattern even when the image dimensions alone would suggest a different structure. Pass `description` to `Pipeline`, `VisualStyleExtractor`, `ConsistencyGuard`, or `PageStructureClassifier` directly to improve structural routing accuracy, or pass `--description` on the CLI (see CLI Flags above) to get the same effect without writing Python.
+Automatic vision analysis (above) is the primary way structure is now detected, so you shouldn't need to write a description in normal use. `description` remains supported as a manual override for the heuristic fallback path: the pipeline, extractor, classifier, and consistency guard all accept an optional `description` string, which guides `PageStructureClassifier` to infer the correct content pattern even when the image dimensions alone would suggest a different structure. Pass `description` to `Pipeline`, `VisualStyleExtractor`, `ConsistencyGuard`, or `PageStructureClassifier` directly, or pass `--description` on the CLI (see CLI Flags above) — either way, providing a description skips the vision API call entirely, since it's treated as an explicit override.
 
 ## CLI Usage Examples
 

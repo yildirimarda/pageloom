@@ -18,6 +18,36 @@ class LLMProvider(Protocol):
         temperature: float = 0.5,
     ) -> str: ...
 
+    def generate_vision_content(
+        self,
+        prompt: str,
+        image_data_url: str,
+        max_tokens: int,
+        temperature: float = 0.2,
+    ) -> str: ...
+
+
+def _classify_provider_error(exc: Exception, provider_name: str) -> str:
+    """Map a raw SDK exception to a clear, provider-labeled error message."""
+    exc_name = exc.__class__.__name__
+    if "RateLimit" in exc_name:
+        return f"LLM provider '{provider_name}' rate limit exceeded."
+    if "Timeout" in exc_name or "APITimeout" in exc_name:
+        return f"LLM provider '{provider_name}' request timed out."
+    if "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
+        return f"LLM provider '{provider_name}' invalid or missing API key."
+    return f"LLM provider '{provider_name}' API call failed: {exc}"
+
+
+def _parse_data_url(data_url: str) -> tuple[str, str, str]:
+    """Split a `data:<media_type>;base64,<data>` URL into (media_type, encoding, data)."""
+    if not data_url.startswith("data:"):
+        raise ValueError("Expected a data: URL")
+    header, _, b64_data = data_url.partition(",")
+    media_part = header[len("data:") :]
+    media_type, _, encoding = media_part.partition(";")
+    return media_type or "image/png", encoding or "base64", b64_data
+
 
 class OpenAIProvider:
     """OpenAI-compatible provider (OpenAI, OpenRouter)."""
@@ -59,20 +89,50 @@ class OpenAIProvider:
                 max_tokens=max_tokens,
             )
         except Exception as exc:
-            exc_name = exc.__class__.__name__
-            provider_name = self.__class__.__name__
-            if "RateLimit" in exc_name:
-                msg = f"LLM provider '{provider_name}' rate limit exceeded."
-            elif "Timeout" in exc_name or "APITimeout" in exc_name:
-                msg = f"LLM provider '{provider_name}' request timed out."
-            elif "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
-                msg = f"LLM provider '{provider_name}' invalid or missing API key."
-            else:
-                msg = f"LLM provider '{provider_name}' API call failed: {exc}"
-            raise RuntimeError(msg) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("LLM returned empty content")
+        return raw
+
+    def generate_vision_content(
+        self,
+        prompt: str,
+        image_data_url: str,
+        max_tokens: int,
+        temperature: float = 0.2,
+    ) -> str:
+        try:
+            import openai
+        except ImportError as exc:
+            raise RuntimeError(
+                "Vision-based page analysis requires the 'openai' package. "
+                "Install it with: pip install openai"
+            ) from exc
+        client = openai.OpenAI(
+            api_key=self.api_key or "sk-dummy",
+            base_url=self.endpoint,
+        )
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_data_url}},
+                        ],
+                    }
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+        raw = response.choices[0].message.content
+        if raw is None:
+            raise RuntimeError("Vision model returned empty content")
         return raw
 
 
@@ -111,20 +171,55 @@ class AnthropicProvider:
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as exc:
-            exc_name = exc.__class__.__name__
-            provider_name = self.__class__.__name__
-            if "RateLimit" in exc_name:
-                msg = f"LLM provider '{provider_name}' rate limit exceeded."
-            elif "Timeout" in exc_name or "APITimeout" in exc_name:
-                msg = f"LLM provider '{provider_name}' request timed out."
-            elif "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
-                msg = f"LLM provider '{provider_name}' invalid or missing API key."
-            else:
-                msg = f"LLM provider '{provider_name}' API call failed: {exc}"
-            raise RuntimeError(msg) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.content[0].text if response.content else None
         if raw is None:
             raise RuntimeError("LLM returned empty content")
+        return raw
+
+    def generate_vision_content(
+        self,
+        prompt: str,
+        image_data_url: str,
+        max_tokens: int,
+        temperature: float = 0.2,
+    ) -> str:
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise RuntimeError(
+                "Vision-based page analysis with Anthropic requires the 'anthropic' package. "
+                "Install it with: pip install anthropic"
+            ) from exc
+        media_type, _, b64_data = _parse_data_url(image_data_url)
+        client = anthropic.Anthropic(api_key=self.api_key or "sk-dummy")
+        try:
+            response = client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": b64_data,
+                                },
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            )
+        except Exception as exc:
+            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+        raw = response.content[0].text if response.content else None
+        if raw is None:
+            raise RuntimeError("Vision model returned empty content")
         return raw
 
 
@@ -172,20 +267,50 @@ class OpenRouterProvider:
                 max_tokens=max_tokens,
             )
         except Exception as exc:
-            exc_name = exc.__class__.__name__
-            provider_name = self.__class__.__name__
-            if "RateLimit" in exc_name:
-                msg = f"LLM provider '{provider_name}' rate limit exceeded."
-            elif "Timeout" in exc_name or "APITimeout" in exc_name:
-                msg = f"LLM provider '{provider_name}' request timed out."
-            elif "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
-                msg = f"LLM provider '{provider_name}' invalid or missing API key."
-            else:
-                msg = f"LLM provider '{provider_name}' API call failed: {exc}"
-            raise RuntimeError(msg) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("LLM returned empty content")
+        return raw
+
+    def generate_vision_content(
+        self,
+        prompt: str,
+        image_data_url: str,
+        max_tokens: int,
+        temperature: float = 0.2,
+    ) -> str:
+        try:
+            import openai
+        except ImportError as exc:
+            raise RuntimeError(
+                "Vision-based page analysis requires the 'openai' package. "
+                "Install it with: pip install openai"
+            ) from exc
+        client = openai.OpenAI(
+            api_key=self.api_key or "sk-dummy",
+            base_url=self.endpoint,
+        )
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": image_data_url}},
+                        ],
+                    }
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+        raw = response.choices[0].message.content
+        if raw is None:
+            raise RuntimeError("Vision model returned empty content")
         return raw
 
 
@@ -257,8 +382,29 @@ class LLMContentGenerator:
         )
         element_count = (page_structure or {}).get("element_count", 1)
         arrangement = (page_structure or {}).get("arrangement", "centered")
+        content_type_description = (page_structure or {}).get("content_type_description")
+        example_content_items = (page_structure or {}).get("example_content_items") or []
 
-        if content_pattern == "object_name_pair":
+        if content_type_description:
+            # Open-ended path: the page structure came from PageVisionAnalyzer (or any
+            # caller that supplies a free-text description of the page type), so this
+            # is NOT limited to the three legacy content_pattern buckets below -- it
+            # works for any page type (numbers, digits, word-image matching, shapes,
+            # colors, etc.) described in plain language.
+            examples_str = (
+                ", ".join(example_content_items[:5])
+                if example_content_items
+                else "items appropriate for this page type"
+            )
+            prompt_template = (
+                f"Generate exactly {count} new content items for a children's book page. "
+                f"The page type is: {content_type_description} "
+                f"(roughly {element_count} illustrated element(s) per page, arranged in a {arrangement} layout). "
+                f"Each item should be a short label/topic in the same style and spirit as these examples "
+                f"from the original page, but NOT repeating them: {examples_str}. "
+                f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation."
+            )
+        elif content_pattern == "object_name_pair":
             prompt_template = (
                 f"Generate exactly {count} simple children's book object names (single objects like Cat, Dog, Tree). "
                 f"Each item should be a single object name suitable for a naming page with a photo-realistic illustration and its name label. "

@@ -10,7 +10,7 @@ from PIL import Image
 from pageloom import settings
 from pageloom.generator import IllustrationGenerator
 from pageloom.overlay import TextOverlay
-from pageloom.page_structure_classifier import PageStructureClassifier
+from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
@@ -25,6 +25,8 @@ class Pipeline:
         description: str = "",
         generator: IllustrationGenerator | None = None,
         compiler: PDFCompiler | None = None,
+        page_structure: dict | None = None,
+        vision_analyzer: object | None = None,
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
@@ -34,10 +36,14 @@ class Pipeline:
         self.generator = generator or IllustrationGenerator()
         self.overlay = TextOverlay(style_profile=self.style)
         self.compiler = compiler or PDFCompiler()
-        # Detect page structure for full structural routing through the pipeline
-        self.page_structure = PageStructureClassifier(
-            source=example_image, description=description
-        ).classify()
+        # Detect page structure for full structural routing through the pipeline.
+        # A pre-computed `page_structure` (e.g. one the CLI already obtained via
+        # vision analysis) is used as-is to avoid a second, redundant analysis
+        # call; otherwise detection runs now, preferring `vision_analyzer` when
+        # given and falling back to the heuristic classifier automatically.
+        self.page_structure = page_structure or detect_structure(
+            source=example_image, description=description, vision_analyzer=vision_analyzer
+        )
 
     def run(
         self,

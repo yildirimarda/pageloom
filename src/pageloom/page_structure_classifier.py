@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PIL import Image
@@ -74,3 +75,32 @@ class PageStructureClassifier:
             "text_image_relationship": text_image_relationship,
             "image_size": (width, height),
         }
+
+
+def detect_structure(
+    source: str | Path | Image.Image,
+    description: str = "",
+    vision_analyzer: object | None = None,
+) -> dict:
+    """Detect page structure, preferring a vision-capable LLM analysis when
+    available and falling back to the description/heuristic classifier.
+
+    `vision_analyzer` is any object exposing an `analyze(source, description)`
+    method that returns a structure dict (see `pageloom.vision.PageVisionAnalyzer`)
+    and raises `pageloom.vision.VisionAnalysisError` on failure. Vision failures
+    are caught here and reported to stderr as a warning -- they never abort the
+    run, since structure detection always has the heuristic classifier as a
+    working (if less accurate) fallback.
+    """
+    if vision_analyzer is not None:
+        from pageloom.vision import VisionAnalysisError
+
+        try:
+            return vision_analyzer.analyze(source, description=description)
+        except VisionAnalysisError as exc:
+            print(
+                f"Warning: vision-based page analysis failed, falling back to "
+                f"heuristic classification: {exc}",
+                file=sys.stderr,
+            )
+    return PageStructureClassifier(source=source, description=description).classify()

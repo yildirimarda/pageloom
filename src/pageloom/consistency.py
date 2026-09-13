@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from pageloom.page_structure_classifier import PageStructureClassifier
+from pageloom.page_structure_classifier import detect_structure
 from pageloom.style_extractor import VisualStyleExtractor
 
 
@@ -21,11 +21,18 @@ class ConsistencyGuard:
         description: str = "",
         color_tolerance_percent: float = 20.0,
         size_tolerance_percent: float = 25.0,
+        page_structure: dict | None = None,
+        vision_analyzer: object | None = None,
     ) -> None:
         self.example_image: Image.Image | None = None
         self.example_style: dict | None = None
         self.color_tolerance_percent = color_tolerance_percent
         self.size_tolerance_percent = size_tolerance_percent
+        self.description = description
+        # Only meaningful when there's an example image to (re-)analyze; kept on
+        # self so verify() can apply the same detection method (vision or
+        # heuristic) to generated images for a like-for-like comparison.
+        self.vision_analyzer = vision_analyzer
 
         if example_image is not None and example_style is not None:
             raise ValueError("Provide either example_image or example_style, not both.")
@@ -34,28 +41,30 @@ class ConsistencyGuard:
             extractor = VisualStyleExtractor(example_image, description=description)
             self.example_style = extractor.extract()
             self.example_image = extractor.image
-            self.classifier = PageStructureClassifier(source=example_image, description=description)
+            self.example_structure = page_structure or detect_structure(
+                source=example_image, description=description, vision_analyzer=vision_analyzer
+            )
         elif example_style is not None:
             self.example_style = example_style
             layout_hint = str(example_style.get("composition", {}).get("layout_type", ""))
-            description_for_class = description or layout_hint
-            self.classifier = PageStructureClassifier(description=description_for_class)
+            # No original image available (style-only init) and no vision analysis
+            # possible without one -- fall back to the layout hint as a description,
+            # same as before, so verify() classifies generated images consistently.
+            self.description = description or layout_hint
+            if page_structure is not None:
+                self.example_structure = page_structure
+            else:
+                comp = example_style.get("composition", {})
+                self.example_structure = {
+                    "content_pattern": comp.get("layout_type", "single_letter_word_illustration"),
+                    "element_count": 1,
+                    "arrangement": "centered",
+                    "text_image_relationship": "label_per_image",
+                }
         else:
             raise ValueError("Provide either example_image or example_style.")
         if not hasattr(self, "example_image"):
             self.example_image = None
-        # Derive structural reference from example
-        if self.example_image is not None:
-            self.example_structure = self.classifier.classify(self.example_image)
-        else:
-            # If initialized with style only, build a synthetic structure reference
-            comp = self.example_style.get("composition", {})
-            self.example_structure = {
-                "content_pattern": comp.get("layout_type", "single_letter_word_illustration"),
-                "element_count": 1,
-                "arrangement": "centered",
-                "text_image_relationship": "label_per_image",
-            }
 
     def verify(self, generated_image: str | Path | Image.Image) -> dict:
         """Compare a generated page to the example and return a result."""
@@ -141,8 +150,14 @@ class ConsistencyGuard:
         if not dim_ok:
             issues.append("Page dimensions differ from example.")
 
-        # Structural conformance (page-structure classifier output)
-        generated_structure = self.classifier.classify(image)
+        # Structural conformance (page-structure classifier output). Uses the
+        # same detection method (vision analyzer, if configured, else the
+        # heuristic classifier) as the example so patterns are comparable --
+        # this matters for open-ended vision-derived patterns, which won't
+        # match any of the heuristic classifier's fixed 3 categories.
+        generated_structure = detect_structure(
+            source=image, description=self.description, vision_analyzer=self.vision_analyzer
+        )
         example_structure = getattr(self, "example_structure", {})
         structure_ok = True
         structure_issues: list[str] = []

@@ -65,6 +65,49 @@
       supported page structures / how a new structure type would be added — these capabilities were 
       planned after the README was already written and are currently undocumented      
 
+## Milestone 5: Genuine open-ended page-type recognition (vision-based)
+- [x] User-flagged gap: despite Milestone 4 claiming full "generalization", the pipeline only ever
+      recognized 3 hardcoded `content_pattern` values (`single_letter_word_illustration`,
+      `object_name_pair`, `multi_item_scene`), detected via keyword matching on a manually-typed
+      `description` string or a crude image aspect-ratio guess -- there was no actual image
+      understanding. Page types the user actually needs (number pages, digit pages, word-image
+      matching grids, etc.) were not recognized and the user did not want to hand-write a
+      description for every run.
+- [x] Add `PageVisionAnalyzer` (`src/pageloom/vision.py`): sends the example page image itself to a
+      vision-capable (multimodal) LLM and asks for a structured JSON description of the page's type,
+      element count, arrangement, text/image relationship, and the actual content items visible on
+      the page -- open-ended, not restricted to a fixed enum of page types.
+- [x] Default to OpenRouter's free `openrouter/free` auto-router for vision analysis (zero cost, no
+      credit card) per explicit user request to keep this free-first; OpenAI (`gpt-4o-mini`) and
+      Anthropic (`claude-3-haiku-20240307`) supported as alternatives. Confirmed via web research
+      (Sept 2026) that OpenRouter offers free vision-capable models and that the auto-router is the
+      most resilient default since the free model roster changes over time.
+- [x] Confirmed and documented that the existing Stable Diffusion model (`diffusers`,
+      text-to-image only) cannot be reused for image analysis -- a separate, genuinely multimodal
+      model is required. This was a direct question the user asked; answered in the README's new
+      "Automatic Visual Page-Structure Analysis" section.
+- [x] Wire vision analysis into the CLI as the default path (`cli.py`): used automatically unless
+      `--description` (explicit override) or `--no-vision` (explicit opt-out) is given. Failures
+      (missing key, rate limit, malformed response) are caught and reported as a warning, falling
+      back to the heuristic classifier -- vision is a best-effort upgrade, never a hard requirement.
+- [x] Add `detect_structure()` helper (`page_structure_classifier.py`) shared by `Pipeline`,
+      `ConsistencyGuard`, and the CLI so vision-first-with-heuristic-fallback logic lives in one place.
+- [x] Generalize `LLMContentGenerator.generate()` with an open-ended prompt path driven by
+      `content_type_description`/`example_content_items` (used whenever present) ahead of the three
+      legacy hardcoded branches (kept as the fallback for the heuristic-only path), so genuinely novel
+      page types generate matching content without any new code.
+- [x] `ConsistencyGuard` accepts a `vision_analyzer` too, and re-classifies the *generated* image with
+      the same method used for the example (vision or heuristic) so open-ended patterns remain
+      comparable -- reusing the heuristic classifier only on one side would make every vision-derived
+      pattern look like a false mismatch.
+- [x] Add tests: `tests/test_vision.py` (provider validation, JSON parsing incl. markdown-fenced and
+      malformed responses, multimodal request shape), CLI wiring tests (auto-vision, `--no-vision`,
+      graceful fallback, `--vision-provider`), `detect_structure()` fallback tests, and a
+      `LLMContentGenerator` test proving a novel pattern (`number_count_matching`, never hardcoded
+      anywhere) is handled correctly end-to-end.
+- [x] Document the whole feature in README.md (free-tier setup, env vars, fallback behavior, why
+      Stable Diffusion can't do this) and add a README test asserting the documentation exists.
+
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
 - [x] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain

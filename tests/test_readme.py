@@ -69,3 +69,15 @@ def test_readme_documents_adding_new_structure():
     content = readme_path.read_text()
     assert "Adding a New" in content or "new structure" in content.lower()
     assert "PageStructureClassifier" in content
+
+
+def test_readme_documents_automatic_vision_analysis():
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+    assert "vision" in content.lower()
+    assert "--no-vision" in content
+    assert "--vision-provider" in content
+    assert "PAGELOOM_VISION_PROVIDER" in content
+    assert "OPENROUTER_VISION_MODEL" in content
+    # The doc must explain why Stable Diffusion can't be reused for analysis.
+    assert "generation" in content.lower() and "Stable Diffusion" in content

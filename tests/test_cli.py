@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from PIL import Image
 
 from pageloom.cli import DEFAULT_CONTENTS, main
+from pageloom.vision import VisionAnalysisError
 
 
 def test_cli_generate_pages_param(tmp_path: Path):
@@ -14,7 +15,17 @@ def test_cli_generate_pages_param(tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="purple")
     img.save(img_path)
 
-    with patch("pageloom.cli.Pipeline") as mock_pipeline:
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
         mock_instance = MagicMock()
         mock_pipeline.return_value = mock_instance
         mock_instance.run.return_value = tmp_path / "output.pdf"
@@ -32,7 +43,9 @@ def test_cli_generate_pages_param(tmp_path: Path):
         )
         assert result == 0
 
-        mock_pipeline.assert_called_once_with(example_image=str(img_path), description="")
+        mock_pipeline.assert_called_once_with(
+            example_image=str(img_path), description="", page_structure=detected_structure
+        )
         call_args = mock_instance.run.call_args
         assert call_args is not None
         contents = call_args.kwargs.get("contents") or call_args[1].get("contents")
@@ -287,17 +300,19 @@ def test_cli_non_alphabet_structure_overflow_triggers_llm(tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="green")
     img.save(img_path)
 
-    # Force the classifier to return a non-alphabet structure.
+    # Force structure detection to return a non-alphabet structure.
     with (
-        patch("pageloom.cli.PageStructureClassifier") as mock_classifier,
+        patch(
+            "pageloom.cli.detect_structure",
+            return_value={
+                "content_pattern": "object_name_pair",
+                "element_count": 1,
+                "arrangement": "centered",
+                "text_image_relationship": "label_per_image",
+            },
+        ),
         patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
     ):
-        mock_classifier.return_value.classify.return_value = {
-            "content_pattern": "object_name_pair",
-            "element_count": 1,
-            "arrangement": "centered",
-            "text_image_relationship": "label_per_image",
-        }
         mock_openai_module = MagicMock()
         mock_client = MagicMock()
         mock_response = MagicMock()
@@ -356,13 +371,15 @@ def test_cli_non_alphabet_overflow_error_message(tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="blue")
     img.save(img_path)
 
-    with patch("pageloom.cli.PageStructureClassifier") as mock_classifier:
-        mock_classifier.return_value.classify.return_value = {
+    with patch(
+        "pageloom.cli.detect_structure",
+        return_value={
             "content_pattern": "multi_item_scene",
             "element_count": 3,
             "arrangement": "grid",
             "text_image_relationship": "label_per_image",
-        }
+        },
+    ):
         result = main(
             [
                 "generate",
@@ -378,23 +395,26 @@ def test_cli_non_alphabet_overflow_error_message(tmp_path: Path):
 
 
 def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
-    """--description must be passed through to both PageStructureClassifier (so
-    structural routing works from the CLI, not just the library API) and Pipeline."""
+    """--description must be passed through to structure detection (so structural
+    routing works from the CLI, not just the library API) and to Pipeline. Providing
+    --description should also skip automatic vision analysis entirely (no network call)."""
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (800, 400), color="green")
     img.save(img_path)
 
+    detected_structure = {
+        "content_pattern": "object_name_pair",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
     with (
-        patch("pageloom.cli.PageStructureClassifier") as mock_classifier,
+        patch("pageloom.cli.detect_structure", return_value=detected_structure) as mock_detect,
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
         patch("pageloom.cli.Pipeline") as mock_pipeline,
         patch("pageloom.cli.LLMContentGenerator") as mock_llm_gen_cls,
     ):
-        mock_classifier.return_value.classify.return_value = {
-            "content_pattern": "object_name_pair",
-            "element_count": 1,
-            "arrangement": "centered",
-            "text_image_relationship": "label_per_image",
-        }
         mock_llm_gen_cls.return_value.generate.return_value = ["Cat", "Dog"]
         mock_instance = MagicMock()
         mock_pipeline.return_value = mock_instance
@@ -415,9 +435,174 @@ def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
             ]
         )
         assert result == 0
-        mock_classifier.assert_called_once_with(
-            source=str(img_path), description="object name pair"
+        mock_vision_cls.assert_not_called()
+        mock_detect.assert_called_once_with(
+            source=str(img_path), description="object name pair", vision_analyzer=None
         )
         mock_pipeline.assert_called_once_with(
-            example_image=str(img_path), description="object name pair"
+            example_image=str(img_path),
+            description="object name pair",
+            page_structure=detected_structure,
         )
+
+
+def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
+    """With no --description and no --no-vision, the CLI should construct a
+    PageVisionAnalyzer and route its result (an open-ended structure, not one of
+    the 3 legacy categories) all the way through to content generation and Pipeline."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (612, 612), color="orange")
+    img.save(img_path)
+
+    vision_structure = {
+        "content_pattern": "number_count_matching",
+        "content_type_description": (
+            "a page pairing a printed number with a matching count of illustrated objects"
+        ),
+        "element_count": 3,
+        "arrangement": "row",
+        "text_image_relationship": "label_per_image",
+        "example_content_items": ["3 ducks"],
+    }
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+        patch("pageloom.cli.LLMContentGenerator") as mock_llm_gen_cls,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = vision_structure
+        mock_llm_gen_cls.return_value.generate.return_value = ["4 balloons", "5 stars"]
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--use-llm",
+            ]
+        )
+        assert result == 0
+        mock_vision_cls.assert_called_once_with(provider=None)
+        mock_vision_cls.return_value.analyze.assert_called_once_with(
+            str(img_path), description=""
+        )
+        # Novel, non-legacy content_pattern -> 0 built-in content -> LLM generates all of it.
+        mock_llm_gen_cls.return_value.generate.assert_called_once_with(
+            2, page_structure=vision_structure
+        )
+        contents = mock_instance.run.call_args.kwargs.get("contents")
+        assert contents == ["4 balloons", "5 stars"]
+        mock_pipeline.assert_called_once_with(
+            example_image=str(img_path), description="", page_structure=vision_structure
+        )
+
+
+def test_cli_no_vision_flag_skips_vision_analysis(tmp_path: Path):
+    """--no-vision must skip PageVisionAnalyzer construction entirely and fall
+    back straight to heuristic/description-based structure detection."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "3",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--no-vision",
+            ]
+        )
+        assert result == 0
+        mock_vision_cls.assert_not_called()
+
+
+def test_cli_vision_unavailable_falls_back_gracefully(tmp_path: Path, capsys):
+    """If PageVisionAnalyzer construction fails (e.g. no API key configured), the
+    CLI should print a warning and continue via the heuristic fallback rather
+    than crashing."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+
+    with (
+        patch(
+            "pageloom.cli.PageVisionAnalyzer",
+            side_effect=VisionAnalysisError("no API key configured"),
+        ),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "3",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "vision analysis unavailable" in captured.err.lower()
+
+
+def test_cli_vision_provider_flag_passed_through(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = {
+            "content_pattern": "single_letter_word_illustration",
+            "content_type_description": "a letter and word page",
+            "element_count": 1,
+            "arrangement": "centered",
+            "text_image_relationship": "label_per_image",
+            "example_content_items": ["Apple"],
+        }
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "3",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--vision-provider",
+                "anthropic",
+            ]
+        )
+        assert result == 0
+        mock_vision_cls.assert_called_once_with(provider="anthropic")

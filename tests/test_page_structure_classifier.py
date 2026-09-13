@@ -2,7 +2,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from pageloom.page_structure_classifier import PageStructureClassifier
+from pageloom.page_structure_classifier import PageStructureClassifier, detect_structure
+from pageloom.vision import VisionAnalysisError
 
 
 def test_classifier_init_from_path(tmp_path: Path):
@@ -68,3 +69,47 @@ def test_classifier_classify_different_image():
         "multi_item_scene",
         "single_letter_word_illustration",
     )
+
+
+class _FakeVisionAnalyzer:
+    def __init__(self, structure=None, error=None):
+        self.structure = structure
+        self.error = error
+        self.calls = []
+
+    def analyze(self, source, description=""):
+        self.calls.append((source, description))
+        if self.error is not None:
+            raise self.error
+        return self.structure
+
+
+def test_detect_structure_prefers_vision_when_available():
+    vision_structure = {
+        "content_pattern": "number_count_matching",
+        "content_type_description": "a page pairing a number with that many objects",
+        "element_count": 3,
+        "arrangement": "row",
+        "text_image_relationship": "label_per_image",
+        "example_content_items": ["3 ducks"],
+    }
+    analyzer = _FakeVisionAnalyzer(structure=vision_structure)
+    img = Image.new("RGB", (612, 612), color="blue")
+    result = detect_structure(source=img, description="", vision_analyzer=analyzer)
+    assert result == vision_structure
+    assert len(analyzer.calls) == 1
+
+
+def test_detect_structure_falls_back_to_heuristic_on_vision_failure(capsys):
+    analyzer = _FakeVisionAnalyzer(error=VisionAnalysisError("rate limited"))
+    img = Image.new("RGB", (512, 512), color="blue")
+    result = detect_structure(source=img, description="single letter word", vision_analyzer=analyzer)
+    assert result["content_pattern"] == "single_letter_word_illustration"
+    captured = capsys.readouterr()
+    assert "falling back to" in captured.err.lower()
+
+
+def test_detect_structure_without_vision_analyzer_uses_heuristic():
+    img = Image.new("RGB", (512, 512), color="blue")
+    result = detect_structure(source=img, description="object name pair", vision_analyzer=None)
+    assert result["content_pattern"] == "object_name_pair"

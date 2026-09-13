@@ -483,3 +483,47 @@ def test_llm_content_generator_routed_by_single_letter_word_illustration():
     finally:
         sys.modules.clear()
         sys.modules.update(original_modules)
+
+
+def test_llm_content_generator_open_ended_pattern_from_vision_analysis():
+    """A page_structure carrying `content_type_description` (as produced by
+    PageVisionAnalyzer) must route through the generic, open-ended prompt path --
+    NOT one of the three legacy hardcoded branches -- so arbitrary page types
+    (numbers, digits, word-image matching, etc.) that were never explicitly
+    coded for are still handled correctly."""
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="4 balloons, 5 stars"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        result = gen.generate(
+            2,
+            page_structure={
+                # A novel pattern id never hardcoded anywhere in content_generator.py.
+                "content_pattern": "number_count_matching",
+                "content_type_description": (
+                    "a page pairing a printed number with a matching count of "
+                    "illustrated objects"
+                ),
+                "element_count": 3,
+                "arrangement": "row",
+                "example_content_items": ["3 ducks"],
+            },
+        )
+        assert len(result) == 2
+        assert result == ["4 balloons", "5 stars"]
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        prompt = call_kwargs["messages"][0]["content"]
+        assert "pairing a printed number with a matching count" in prompt
+        assert "3 ducks" in prompt
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)

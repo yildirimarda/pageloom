@@ -8,8 +8,9 @@ from pathlib import Path
 
 from pageloom import settings
 from pageloom.content_generator import LLMContentGenerator
-from pageloom.page_structure_classifier import PageStructureClassifier
+from pageloom.page_structure_classifier import detect_structure
 from pageloom.pipeline import Pipeline
+from pageloom.vision import PageVisionAnalyzer, VisionAnalysisError
 
 # Default alphabet-style content list used when no explicit contents are given.
 DEFAULT_CONTENTS = [
@@ -82,8 +83,30 @@ def main(argv: list[str] | None = None) -> int:
             "Optional free-text description of the example page (e.g. "
             "'object name pair' or 'alphabet letter word'). Passed to the "
             "page-structure classifier and pipeline to improve structural "
-            "routing accuracy beyond pure image heuristics."
+            "routing accuracy beyond pure image heuristics. Providing this "
+            "skips automatic vision analysis (see --no-vision) since it's "
+            "treated as an explicit override."
         ),
+    )
+    generate_parser.add_argument(
+        "--no-vision",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable automatic vision-based page-structure analysis. By default, "
+            "when no --description is given, PageLoom sends the example image to "
+            "a vision-capable LLM (OpenRouter's free tier by default) to "
+            "automatically detect the page type -- numbers, letters, word-image "
+            "matching, or anything else -- without you having to describe it. "
+            "Pass this flag to fall back to the built-in image-size heuristic instead."
+        ),
+    )
+    generate_parser.add_argument(
+        "--vision-provider",
+        type=str,
+        default=None,
+        choices=["openai", "anthropic", "openrouter"],
+        help="Provider used for automatic vision analysis (default: openrouter, free tier).",
     )
     output_dir = settings.get_output_dir()
     default_output = str(Path(output_dir) / "output.pdf") if output_dir else "output.pdf"
@@ -135,12 +158,30 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: --pages must be at least 1.", file=sys.stderr)
         return 1
 
+    # Automatic vision analysis is the default way to detect page structure: it
+    # looks at the example image itself, so it works for ANY page type (numbers,
+    # letters, word-image matching, etc.) without the user writing a description.
+    # An explicit --description is treated as an override that skips the (network)
+    # vision call; --no-vision opts out entirely in favor of the old heuristic.
+    vision_analyzer = None
+    if not args.no_vision and not args.description:
+        try:
+            vision_analyzer = PageVisionAnalyzer(provider=args.vision_provider)
+        except (ValueError, VisionAnalysisError) as exc:
+            print(
+                f"Warning: automatic vision analysis unavailable ({exc}); "
+                f"falling back to image-size heuristics. Pass --description to "
+                f"improve accuracy, or set up a free OpenRouter key (see README).",
+                file=sys.stderr,
+            )
+
     # Detect page structure from the example image (plus optional description)
     # to route LLM content correctly.
     page_structure = None
     try:
-        classifier = PageStructureClassifier(source=args.example, description=args.description)
-        page_structure = classifier.classify()
+        page_structure = detect_structure(
+            source=args.example, description=args.description, vision_analyzer=vision_analyzer
+        )
     except (ValueError, OSError, FileNotFoundError):
         # If classification fails, fall back to generic single-letter-word structure
         page_structure = {
@@ -186,7 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         contents = built_in_contents[:pages_value]
 
-    pipeline = Pipeline(example_image=args.example, description=args.description)
+    pipeline = Pipeline(
+        example_image=args.example,
+        description=args.description,
+        page_structure=page_structure,
+    )
     result = pipeline.run(
         contents=contents,
         output_path=args.output,
