@@ -226,6 +226,71 @@
       fix every failure at the root — never by weakening, skipping or deleting tests — and 
       confirm the full suite passes with the exact CI commands before opening the PR.
 
+## Milestone 7: Independent, skeptical re-audit of Milestones 5 & 6 against the original ask
+Context: Milestones 5 and 6 above are now entirely checked off, including subjective/self-reported
+items like "Make CI green on main", "Full multi-sub-image compositing", and "Confirmed by live smoke
+test". A previous audit pass in this same file (see the "Discovered" section and its closing
+`<!-- audit pass -->` note) already found that checked-off items are not reliably true just because
+they're marked `[x]` -- e.g. an earlier "descriptions flow through the pipeline" item was marked done
+while the CLI itself still never passed a description, and a "--pages N reconciled with structure"
+item was marked done while a vestigial buggy branch still existed underneath it. Do not assume this
+milestone is any different. Re-verify everything below from the actual code and actual command output,
+not from the checklist text, and do not mark anything here as done without first citing the specific
+file/line/command output that proves it.
+
+Restating the original requirement in plain terms, so the audit has an explicit target instead of a
+vague "check everything": the user provides ONE example page image. The page type is NOT fixed --
+it could be a letter+word page, a number/counting page, a digit page, a word-image matching page, or
+anything else -- and the system must recognize which one it is automatically, without the user typing
+a manual description, by default. This must work at zero cost by default (OpenRouter free tier),
+while still allowing OpenAI/Anthropic as alternatives. The actual artwork for every generated page
+must still be produced 100% locally via the Hugging Face `diffusers` Stable Diffusion pipeline --
+vision analysis is only for understanding the example page's structure, never for drawing. If the
+configured vision model/provider fails for any reason (wrong model, no image support, rate limit,
+garbled response), the run must not crash -- it must say so clearly and continue via a sensible
+fallback. And the pages actually produced for N different example pages of different types must be
+genuinely structurally faithful to their examples, not just pass a unit test built around solid-color
+placeholder images.
+
+- [ ] Re-verify Milestone 6's CI item specifically: don't trust the `[x]`. Actually open the GitHub
+      Actions run for the current `main` (or trigger one) and confirm the `ci` job is green, or if that
+      isn't directly reachable, run the exact commands `.github/workflows/ci.yml` runs --
+      `uv sync --all-extras --dev`, `uv run ruff check .`, `uv run ruff format --check .`,
+      `uv run pytest -q` -- in a correct environment (matching Python, real network) and paste/report
+      the real pass/fail output. This session's own sandbox could not do this (wrong Python version,
+      no network to GitHub/PyPI), so this has still never actually been confirmed by anyone with a
+      working environment -- confirm it now for real.
+- [ ] Re-verify the "multi-sub-image compositing" item line by line against the actual
+      `TextOverlay`/`Pipeline`/`IllustrationGenerator` code: does it really generate one illustration
+      per element and composite them with multiple independent text labels on one canvas, or does it
+      only handle a narrower case? Produce a real generated PDF page for a `multiple_labels` structure
+      (e.g. a 3-item word-image matching page) and visually confirm it actually shows 3 distinct
+      picture+word pairs, not one illustration with one label, or a scene image with overlapping/wrong
+      text.
+- [ ] Re-verify the live smoke test claim: it reports OpenRouter's free tier was reached successfully
+      but also that rate limits were hit (`free-models-per-day-high-balance`). Confirm a full, real
+      `pageloom generate` run (not just the analysis step) completes successfully end-to-end against a
+      real free OpenRouter key for at least one real (non-placeholder) example image, and that the
+      resulting PDF's pages are visually sensible -- open/render the PDF, don't just check that a file
+      exists on disk.
+- [ ] Run three full, real (non-mocked) generations against three different real example page images
+      representing genuinely different page types -- e.g. (1) an alphabet letter+word page, (2) a
+      number/counting page, (3) a word-image matching page with 2-3 pairs -- with no `--description`
+      flag, relying entirely on the default automatic vision analysis. For each: confirm the detected
+      `content_pattern`/`content_type_description` actually matches what a human would call that page
+      type, confirm the generated additional pages are structurally consistent with the example (right
+      number of elements, right label style), and confirm nothing silently fell back to the heuristic
+      classifier without the user being told (check stderr for fallback warnings).
+- [ ] Re-verify the "provider error messages fixed" item: confirm the exact user-facing strings for a
+      rate limit, a timeout, an invalid key, and a "model doesn't support images" failure across all
+      three providers (OpenAI, Anthropic, OpenRouter) read as intended (readable provider names, not
+      Python class names like `OpenAIProvider`) by triggering each condition (mocked is fine here,
+      since these are error-formatting checks, not integration behavior) and reading the actual output.
+- [ ] For every item re-verified above: if it holds up, leave it checked and add a one-line note citing
+      the evidence (file/line, command output, or the real PDF produced). If it does NOT hold up, do
+      not just re-check it anyway -- uncheck it, describe the actual gap precisely (same style as the
+      "Audit follow-up" entries under Discovered below), and fix it before moving on.      
+
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
 - [x] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain
