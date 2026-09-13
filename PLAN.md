@@ -25,7 +25,7 @@
 - [x] Support environment-variable overrides for key settings (model id, device, output dir, HF cache dir) so Docker and local runs can differ in config without code changes
 - [x] Document and handle first-time model download/caching (e.g. HF_HOME volume) so Docker builds don't re-download weights on every run
 - [x] Expand test coverage with unit tests for the style-prompt builder, text overlay, and PDF compiler individually, not just the end-to-end integration test
-- [ ] Add an optional LLM-based content-list generator to supply arbitrary N page topics/words when the requested page count exceeds the built-in alphabet list (ties directly into the `--pages N` feature once pages > 26)
+- [x] Add an optional LLM-based content-list generator to supply arbitrary N page topics/words when the requested page count exceeds the built-in alphabet list (ties directly into the `--pages N` feature once pages > 26)
 
 ## Milestone 4: Generalization beyond alphabet pages
 - [x] Refactor pipeline to infer layout and style directly from any example page instead of hardcoding letter/word templates
