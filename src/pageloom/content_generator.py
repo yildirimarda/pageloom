@@ -51,12 +51,25 @@ class OpenAIProvider:
             api_key=self.api_key or "sk-dummy",
             base_url=self.endpoint,
         )
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            exc_name = exc.__class__.__name__
+            provider_name = self.__class__.__name__
+            if "RateLimit" in exc_name:
+                msg = f"LLM provider '{provider_name}' rate limit exceeded."
+            elif "Timeout" in exc_name or "APITimeout" in exc_name:
+                msg = f"LLM provider '{provider_name}' request timed out."
+            elif "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
+                msg = f"LLM provider '{provider_name}' invalid or missing API key."
+            else:
+                msg = f"LLM provider '{provider_name}' API call failed: {exc}"
+            raise RuntimeError(msg) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("LLM returned empty content")
@@ -90,12 +103,25 @@ class AnthropicProvider:
                 "Install it with: pip install anthropic"
             ) from exc
         client = anthropic.Anthropic(api_key=self.api_key or "sk-dummy")
-        response = client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        try:
+            response = client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as exc:
+            exc_name = exc.__class__.__name__
+            provider_name = self.__class__.__name__
+            if "RateLimit" in exc_name:
+                msg = f"LLM provider '{provider_name}' rate limit exceeded."
+            elif "Timeout" in exc_name or "APITimeout" in exc_name:
+                msg = f"LLM provider '{provider_name}' request timed out."
+            elif "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
+                msg = f"LLM provider '{provider_name}' invalid or missing API key."
+            else:
+                msg = f"LLM provider '{provider_name}' API call failed: {exc}"
+            raise RuntimeError(msg) from exc
         raw = response.content[0].text if response.content else None
         if raw is None:
             raise RuntimeError("LLM returned empty content")
@@ -138,12 +164,25 @@ class OpenRouterProvider:
             api_key=self.api_key or "sk-dummy",
             base_url=self.endpoint,
         )
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            exc_name = exc.__class__.__name__
+            provider_name = self.__class__.__name__
+            if "RateLimit" in exc_name:
+                msg = f"LLM provider '{provider_name}' rate limit exceeded."
+            elif "Timeout" in exc_name or "APITimeout" in exc_name:
+                msg = f"LLM provider '{provider_name}' request timed out."
+            elif "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
+                msg = f"LLM provider '{provider_name}' invalid or missing API key."
+            else:
+                msg = f"LLM provider '{provider_name}' API call failed: {exc}"
+            raise RuntimeError(msg) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("LLM returned empty content")
@@ -233,41 +272,10 @@ class LLMContentGenerator:
                 if len(result) >= count:
                     break
         if len(result) < count:
-            fallback_words = [
-                "Dragon",
-                "Elephant",
-                "Flower",
-                "Garden",
-                "House",
-                "Island",
-                "Journey",
-                "Kingdom",
-                "Light",
-                "Mountain",
-                "Night",
-                "Ocean",
-                "Planet",
-                "Queen",
-                "River",
-                "Star",
-                "Tree",
-                "Universe",
-                "Valley",
-                "Wind",
-                "Xylophone",
-                "Yacht",
-                "Zebra",
-                "Air",
-                "Ball",
-                "Cloud",
-                "Door",
-                "Eagle",
-                "Fish",
-                "Gate",
-            ]
-            for word in fallback_words:
-                if word not in result:
-                    result.append(word)
-                if len(result) >= count:
-                    break
+            raise RuntimeError(
+                f"LLM provider '{self.provider_name}' returned insufficient content: "
+                f"expected {count}, got {len(result)}. The API call may have failed "
+                f"(timeout, rate limit, invalid key) or returned truncated output. "
+                f"Check your credentials and network connection."
+            )
         return result[:count]

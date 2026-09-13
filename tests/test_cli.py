@@ -158,7 +158,9 @@ def test_cli_use_llm_exceeds_full_content_list(tmp_path: Path):
     mock_openai_module = MagicMock()
     mock_client = MagicMock()
     mock_response = MagicMock()
-    mock_response.choices = [MagicMock(message=MagicMock(content="Extra1, Extra2"))]
+    mock_response.choices = [
+        MagicMock(message=MagicMock(content=", ".join([f"Extra{i}" for i in range(1, 27)])))
+    ]
     mock_client.chat.completions.create.return_value = mock_response
     mock_openai_module.OpenAI.return_value = mock_client
 
