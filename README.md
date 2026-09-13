@@ -130,7 +130,7 @@ If an LLM API call fails — for example due to a rate limit, timeout, invalid k
 - `object_name_pair` — a photo-realistic object with its name label (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
 - `multi_item_scene` — a themed scene with multiple labeled items, such as a grid or puzzle (`element_count` inferred from image width, `arrangement: grid`, `text_image_relationship: label_per_image`).
 
-The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`).
+The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`). Additionally, `Pipeline.run()` derives the default `page_format` (`object_name` or `themed_scene`) from the detected structure when `page_format="standard"` is not explicitly overridden.
 
 ### Adding a New Structure Type
 
@@ -140,6 +140,10 @@ To add a new page structure:
 2. Add a new prompt branch in `LLMContentGenerator.generate()` in `src/pageloom/content_generator.py` for the new `content_pattern`, defining how content words/topics should be generated for that structure.
 3. Update this README to document the new structure and its structural attributes.
 4. Add a test in `tests/test_content_generator.py` verifying the new pattern produces content with the correct request shape (similar to `test_llm_content_generator_routed_by_object_name_pair`).
+
+### Description-Based Pattern Inference
+
+The pipeline, extractor, classifier, and consistency guard all accept an optional `description` string. When a page is described (e.g., `"object name pair"` or `"alphabet letter word"`), the description guides `PageStructureClassifier` to infer the correct content pattern even when the image dimensions alone would suggest a different structure. Pass `description` to `Pipeline`, `VisualStyleExtractor`, `ConsistencyGuard`, or `PageStructureClassifier` directly to improve structural routing accuracy.
 
 ## CLI Usage Examples
 
@@ -151,7 +155,10 @@ PageLoom is primarily used as a library via the `Pipeline` class in Python scrip
 from pageloom.pipeline import Pipeline
 from pathlib import Path
 
-pipeline = Pipeline(example_image="example.png")
+# The pipeline detects the page structure from the example image and routes
+# content accordingly. You can provide an optional description for more accurate
+# structural inference (e.g., "object name pair" or "alphabet letter word").
+pipeline = Pipeline(example_image="example.png", description="alphabet letter word")
 result = pipeline.run(
     contents=["Apple", "Banana", "Cherry"],
     themes=["fruit", "tropical", "orchard"],

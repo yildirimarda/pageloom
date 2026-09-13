@@ -10,6 +10,7 @@ from PIL import Image
 from pageloom import settings
 from pageloom.generator import IllustrationGenerator
 from pageloom.overlay import TextOverlay
+from pageloom.page_structure_classifier import PageStructureClassifier
 from pageloom.pdf_compiler import PDFCompiler
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
@@ -21,10 +22,11 @@ class Pipeline:
     def __init__(
         self,
         example_image: str | Path | Image.Image,
+        description: str = "",
         generator: IllustrationGenerator | None = None,
         compiler: PDFCompiler | None = None,
     ) -> None:
-        self.extractor = VisualStyleExtractor(example_image)
+        self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
         self.prompt_builder = StylePromptBuilder(
             example_style=self.style,
@@ -32,6 +34,10 @@ class Pipeline:
         self.generator = generator or IllustrationGenerator()
         self.overlay = TextOverlay(style_profile=self.style)
         self.compiler = compiler or PDFCompiler()
+        # Detect page structure for full structural routing through the pipeline
+        self.page_structure = PageStructureClassifier(
+            source=example_image, description=description
+        ).classify()
 
     def run(
         self,
@@ -43,6 +49,17 @@ class Pipeline:
         cache_dir: str | Path | None = None,
     ) -> Path:
         """Generate matching pages for each content item and compile to PDF."""
+        # Derive page format from detected structure when user hasn't overridden it
+        # with a non-default value. The CLI passes explicit formats; the library
+        # can infer from the example page structure.
+        derived_format = page_format
+        if page_format == "standard" and self.page_structure:
+            pattern = self.page_structure.get("content_pattern", "")
+            if pattern == "object_name_pair":
+                derived_format = "object_name"
+            elif pattern == "multi_item_scene":
+                derived_format = "themed_scene"
+        page_format = derived_format
         output_path_obj = Path(output_path) if output_path else Path("output.pdf")
         output_dir = settings.get_output_dir()
         if output_dir is not None and not output_path_obj.is_absolute():
