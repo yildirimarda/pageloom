@@ -119,7 +119,10 @@ def test_cli_use_llm_extends_past_alphabet_limit(tmp_path: Path):
     original_modules = dict(sys.modules)
     sys.modules["openai"] = mock_openai_module
     try:
-        with patch("pageloom.cli.Pipeline") as mock_pipeline:
+        with (
+            patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
+            patch("pageloom.cli.Pipeline") as mock_pipeline,
+        ):
             mock_instance = MagicMock()
             mock_pipeline.return_value = mock_instance
             mock_instance.run.return_value = tmp_path / "output.pdf"
@@ -164,7 +167,10 @@ def test_cli_use_llm_exceeds_full_content_list(tmp_path: Path):
     original_modules = dict(sys.modules)
     sys.modules["openai"] = mock_openai_module
     try:
-        with patch("pageloom.cli.Pipeline") as mock_pipeline:
+        with (
+            patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
+            patch("pageloom.cli.Pipeline") as mock_pipeline,
+        ):
             mock_instance = MagicMock()
             mock_pipeline.return_value = mock_instance
             mock_instance.run.return_value = tmp_path / "output.pdf"
@@ -206,7 +212,10 @@ def test_cli_llm_provider_flag_passed_to_generator(tmp_path: Path):
     original_modules = dict(sys.modules)
     sys.modules["openai"] = mock_openai_module
     try:
-        with patch("pageloom.cli.Pipeline") as mock_pipeline:
+        with (
+            patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}),
+            patch("pageloom.cli.Pipeline") as mock_pipeline,
+        ):
             mock_instance = MagicMock()
             mock_pipeline.return_value = mock_instance
             mock_instance.run.return_value = tmp_path / "output.pdf"

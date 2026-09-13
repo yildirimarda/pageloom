@@ -175,6 +175,18 @@ class LLMContentGenerator:
         if self.provider_name == "anthropic":
             init_kwargs.pop("endpoint", None)
         self.provider: LLMProvider = provider_cls(**init_kwargs)
+        # Validate that the selected provider's API key is present
+        provider_key = getattr(self.provider, "api_key", None)
+        if not provider_key:
+            env_vars = {
+                "openai": ["OPENAI_API_KEY", "PAGELOOM_LLM_API_KEY"],
+                "anthropic": ["ANTHROPIC_API_KEY", "PAGELOOM_LLM_API_KEY"],
+                "openrouter": ["OPENROUTER_API_KEY", "PAGELOOM_LLM_API_KEY"],
+            }.get(self.provider_name, ["PAGELOOM_LLM_API_KEY"])
+            raise RuntimeError(
+                f"LLM provider '{self.provider_name}' selected but API key is missing. "
+                f"Set the appropriate environment variable ({', '.join(env_vars)}) or pass api_key explicitly."
+            )
 
     @property
     def api_key(self) -> str | None:
