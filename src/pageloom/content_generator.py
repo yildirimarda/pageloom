@@ -81,6 +81,8 @@ def _parse_data_url(data_url: str) -> tuple[str, str, str]:
 class OpenAIProvider:
     """OpenAI-compatible provider (OpenAI, OpenRouter)."""
 
+    provider_name = "openai"
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -122,7 +124,7 @@ class OpenAIProvider:
         try:
             response = _retry_with_backoff(_call)
         except Exception as exc:
-            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("LLM returned empty content")
@@ -166,7 +168,7 @@ class OpenAIProvider:
         try:
             response = _retry_with_backoff(_call)
         except Exception as exc:
-            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("Vision model returned empty content")
@@ -175,6 +177,8 @@ class OpenAIProvider:
 
 class AnthropicProvider:
     """Anthropic Claude provider."""
+
+    provider_name = "anthropic"
 
     def __init__(
         self,
@@ -212,7 +216,7 @@ class AnthropicProvider:
         try:
             response = _retry_with_backoff(_call)
         except Exception as exc:
-            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
         raw = response.content[0].text if response.content else None
         if raw is None:
             raise RuntimeError("LLM returned empty content")
@@ -261,7 +265,7 @@ class AnthropicProvider:
         try:
             response = _retry_with_backoff(_call)
         except Exception as exc:
-            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
         raw = response.content[0].text if response.content else None
         if raw is None:
             raise RuntimeError("Vision model returned empty content")
@@ -270,6 +274,8 @@ class AnthropicProvider:
 
 class OpenRouterProvider:
     """OpenRouter provider (OpenAI-compatible endpoint)."""
+
+    provider_name = "openrouter"
 
     def __init__(
         self,
@@ -316,7 +322,7 @@ class OpenRouterProvider:
         try:
             response = _retry_with_backoff(_call)
         except Exception as exc:
-            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("LLM returned empty content")
@@ -360,7 +366,7 @@ class OpenRouterProvider:
         try:
             response = _retry_with_backoff(_call)
         except Exception as exc:
-            raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
+            raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
         raw = response.choices[0].message.content
         if raw is None:
             raise RuntimeError("Vision model returned empty content")
