@@ -568,6 +568,97 @@ def test_cli_vision_unavailable_falls_back_gracefully(tmp_path: Path, capsys):
         assert "vision analysis unavailable" in captured.err.lower()
 
 
+def test_cli_check_vision_passes(tmp_path: Path):
+    """check-vision should report PASS when vision provider and analysis work."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (256, 256), color="red").save(img_path)
+
+    with (
+        patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+    ):
+        mock_instance = MagicMock()
+        mock_vision_cls.return_value = mock_instance
+        mock_instance.provider_name = "openrouter"
+        mock_instance.provider = MagicMock()
+        mock_instance.provider.model = "openrouter/free"
+        mock_instance.provider.endpoint = None
+        mock_instance.analyze.return_value = {
+            "content_pattern": "digit_illustration",
+            "element_count": 1,
+            "arrangement": "centered",
+            "text_image_relationship": "label_per_image",
+        }
+        result = main(["check-vision", "--example", str(img_path)])
+        assert result == 0
+        mock_vision_cls.assert_called_once_with(provider=None)
+        mock_instance.analyze.assert_called_once()
+
+
+def test_cli_check_vision_fails_on_missing_key():
+    """check-vision should exit 1 and print FAIL when the provider has no API key."""
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch(
+            "pageloom.cli.PageVisionAnalyzer",
+            side_effect=VisionAnalysisError("no API key"),
+        ),
+    ):
+        result = main(["check-vision"])
+        assert result == 1
+
+
+def test_cli_check_vision_reports_provider_and_model(tmp_path: Path, capsys):
+    """check-vision should clearly report provider/model and smoke-test result."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (256, 256), color="blue").save(img_path)
+
+    with (
+        patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+    ):
+        mock_instance = MagicMock()
+        mock_vision_cls.return_value = mock_instance
+        mock_instance.provider_name = "openrouter"
+        mock_instance.provider = MagicMock()
+        mock_instance.provider.model = "openrouter/free"
+        mock_instance.provider.endpoint = "https://openrouter.ai/api/v1"
+        mock_instance.analyze.return_value = {
+            "content_pattern": "test",
+            "element_count": 2,
+            "arrangement": "row",
+            "text_image_relationship": "label_per_image",
+        }
+        result = main(
+            ["check-vision", "--vision-provider", "openrouter", "--example", str(img_path)]
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "openrouter" in captured.out
+        assert "openrouter/free" in captured.out
+        assert "PASS" in captured.out
+
+
+def test_cli_check_vision_analysis_failure(tmp_path: Path):
+    """If analyze() raises VisionAnalysisError, check-vision exits 1 with FAIL."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (256, 256), color="green").save(img_path)
+
+    with (
+        patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}, clear=False),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+    ):
+        mock_instance = MagicMock()
+        mock_vision_cls.return_value = mock_instance
+        mock_instance.provider_name = "openrouter"
+        mock_instance.provider = MagicMock()
+        mock_instance.provider.model = "openrouter/free"
+        mock_instance.provider.endpoint = None
+        mock_instance.analyze.side_effect = VisionAnalysisError("bad response")
+        result = main(["check-vision", "--example", str(img_path)])
+        assert result == 1
+
+
 def test_cli_vision_provider_flag_passed_through(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")
