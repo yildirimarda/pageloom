@@ -28,6 +28,43 @@ def test_style_prompt_builder_empty_description():
     assert "style reference" not in prompt
 
 
+def test_style_prompt_builder_template_empty_description():
+    builder = StylePromptBuilder("")
+    template = builder.template()
+    assert "content: {content}" in template
+
+
+def test_style_prompt_builder_build_object_name_format():
+    builder = StylePromptBuilder("whimsical watercolor")
+    prompt = builder.build(content="apple", page_format="object_name")
+    assert "Photo-realistic children's book illustration" in prompt
+    assert "object name: apple" in prompt
+
+
+def test_style_prompt_builder_build_themed_scene_format():
+    builder = StylePromptBuilder("soft pastel")
+    prompt = builder.build(content="garden", theme="autumn", page_format="themed_scene")
+    assert "Themed children's book scene illustration" in prompt
+    assert "theme: autumn" in prompt
+    assert "scene: garden" in prompt
+
+
+def test_style_prompt_builder_init_both_image_and_style_raises():
+    try:
+        StylePromptBuilder(example_image="fake.png", example_style={"composition": {}})
+        assert False, "Expected ValueError"
+    except ValueError as exc:
+        assert "Provide either" in str(exc)
+
+
+def test_style_prompt_builder_build_with_example_style_dict():
+    builder = StylePromptBuilder(
+        example_style={"composition": {"layout_type": "centered_text_with_illustration"}}
+    )
+    prompt = builder.build(content="ball")
+    assert "style reference: centered_text_with_illustration" in prompt
+
+
 def test_style_prompt_builder_from_example_image(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (400, 400), color="blue")

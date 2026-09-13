@@ -45,6 +45,37 @@ def test_compile_from_file_path(tmp_path):
     assert result.exists()
 
 
+def test_compile_mixed_image_and_path(tmp_path):
+    output = tmp_path / "mixed.pdf"
+    img_path = tmp_path / "page.png"
+    img = Image.new("RGB", (200, 200), color="green")
+    img.save(img_path)
+    compiler = PDFCompiler()
+    result = compiler.compile([img, img_path], output)
+    assert result.exists()
+
+
+def test_compile_creates_output_directory(tmp_path):
+    output = tmp_path / "nested" / "subdir" / "output.pdf"
+    img = Image.new("RGB", (100, 100), color="black")
+    compiler = PDFCompiler()
+    result = compiler.compile([img], output)
+    assert result.exists()
+    assert output.parent.exists()
+
+
+def test_compile_output_has_correct_page_count(tmp_path):
+    from pypdf import PdfReader
+
+    output = tmp_path / "pages.pdf"
+    img1 = Image.new("RGB", (300, 300), color="red")
+    img2 = Image.new("RGB", (300, 300), color="blue")
+    compiler = PDFCompiler()
+    compiler.compile([img1, img2], output)
+    reader = PdfReader(str(output))
+    assert len(reader.pages) == 2
+
+
 def test_compile_unsupported_type_raises(tmp_path):
     output = tmp_path / "bad.pdf"
     compiler = PDFCompiler()
