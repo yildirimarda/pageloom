@@ -193,6 +193,96 @@ def test_unknown_provider_raises():
         LLMContentGenerator(provider="unknown")
 
 
+def test_llm_api_rate_limit_raises_clear_error():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+
+    class RateLimitError(Exception):
+        pass
+
+    mock_client.chat.completions.create.side_effect = RateLimitError("limit")
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with pytest.raises(RuntimeError, match="rate limit exceeded"):
+            gen.generate(2)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_llm_api_timeout_raises_clear_error():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+
+    class APITimeoutError(Exception):
+        pass
+
+    mock_client.chat.completions.create.side_effect = APITimeoutError("timeout")
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with pytest.raises(RuntimeError, match="timed out"):
+            gen.generate(2)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_llm_api_invalid_key_raises_clear_error():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+
+    class AuthenticationError(Exception):
+        pass
+
+    mock_client.chat.completions.create.side_effect = AuthenticationError("bad key")
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with pytest.raises(RuntimeError, match="invalid or missing API key"):
+            gen.generate(2)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_llm_insufficient_content_raises_clear_error():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="A"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with pytest.raises(RuntimeError, match="returned insufficient content"):
+            gen.generate(3)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
 def test_llm_content_generator_generate_returns_correct_length():
     gen = LLMContentGenerator(api_key="test-key")
     mock_openai_module = MagicMock()
