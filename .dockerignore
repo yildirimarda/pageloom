@@ -1,0 +1,16 @@
+# Prevent model weights or build artifacts from entering the Docker context.
+# Model weights are downloaded at runtime (not baked into the image) and
+# should be persisted via a mounted volume (HF_HOME) instead.
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+outputs/
+*.png
+*.pdf
+.cache/
+huggingface/
