@@ -108,6 +108,76 @@
 - [x] Document the whole feature in README.md (free-tier setup, env vars, fallback behavior, why
       Stable Diffusion can't do this) and add a README test asserting the documentation exists.
 
+## Milestone 6: CI green + vision-analysis hardening (pending, not yet implemented)
+- [ ] **Fix the CI failure introduced by Milestone 5, in this exact order:**
+      1. `uv run ruff format --check .` currently FAILS -- confirmed by running `ruff format --check .`
+         directly (the `ruff` binary works regardless of Python version, so this was verified even
+         though the sandbox couldn't run the full Python toolchain). Exactly 5 files would be
+         reformatted: `src/pageloom/vision.py`, `tests/test_cli.py`, `tests/test_content_generator.py`,
+         `tests/test_integration.py`, `tests/test_page_structure_classifier.py`. Run
+         `uv run ruff format .` to fix, then re-run `uv run ruff format --check .` and
+         `uv run ruff check .` to confirm both are clean, and commit the formatting diff.
+      2. Run `uv run pytest -q` for real and fix any genuine failures. This session's sandbox could
+         not run the project's actual test suite: its Linux environment has Python 3.10.12 with no
+         network access to provision 3.11+ (required by `pyproject.toml`) or install packages, while
+         the repo's committed `.venv` was built for Python 3.12 on a different machine and its compiled
+         extensions (PIL's `_imaging`, `torch`, `pytest`'s own C-extension-adjacent internals) are not
+         loadable under 3.10. All new logic in Milestone 5 (vision.py, the CLI wiring, the generalized
+         content generator, Pipeline/ConsistencyGuard integration, the new settings functions) was
+         instead verified by hand-written scripts that stub `torch`/`diffusers` via `sys.modules` and
+         replay each test's scenario directly -- every one of those passed, but this is not a
+         substitute for actually running `pytest` in the correct environment. Treat this as unverified
+         until CI (or a local `uv run pytest -q` on a matching Python) actually goes green.
+- [ ] Do one real (non-mocked) smoke test of vision analysis: run `pageloom generate` against a real
+      example image with a real, free `OPENROUTER_API_KEY` and no `--description`, and confirm
+      `openrouter/free` actually returns valid JSON matching `PageVisionAnalyzer`'s expected schema.
+      Every existing test mocks the network, so this exact prompt/schema combination has never been
+      verified against a real (especially free-tier, possibly smaller/less instruction-following)
+      vision model. If free models frequently wrap the JSON in extra prose beyond what the current
+      markdown-fence-stripping handles, or omit required fields, consider adding one retry with a
+      stricter "respond with ONLY the JSON object, no other text" reminder before falling back to the
+      heuristic classifier.
+- [ ] Feed `element_count` / `arrangement` / `text_image_relationship` into the actual Stable
+      Diffusion prompt (`StylePromptBuilder.build()` in `src/pageloom/style.py`), not just into the
+      LLM content-list generator's prompt and `ConsistencyGuard`'s comparison. Right now these
+      structural fields are captured (by vision or heuristic) but never reach the image-generation
+      prompt itself -- so a detected "3 items in a row" structure doesn't actually instruct the
+      diffusion model to draw 3 items in a row; the illustration's structural fidelity depends
+      entirely on whatever the content string happens to say (e.g. hoping "4 balloons" gets rendered
+      as exactly 4 balloons), which diffusion models are known to be unreliable at for precise counts.
+- [ ] Decide how to handle `text_image_relationship == "multiple_labels"` and `"no_text"`
+      end-to-end -- `PageVisionAnalyzer`'s prompt already asks for one of `label_per_image` /
+      `multiple_labels` / `no_text`, but `TextOverlay.apply()` (`src/pageloom/overlay.py`) only ever
+      draws a single `text` string at a single position, with no branch reading
+      `text_image_relationship` at all. There is no support today for a real word-image *matching*
+      page with several distinct picture+word pairs on one page, or for suppressing text entirely on
+      `no_text` pages. This likely requires generating multiple sub-illustrations per page (one
+      `IllustrationGenerator.generate()` call per element) and compositing them with multiple
+      `TextOverlay` placements on a single canvas, rather than the current one-image-one-label-per-page
+      architecture -- a real design decision, not a small tweak.
+- [ ] Add a small cache for vision-analysis results (keyed on a hash of the example image bytes +
+      description), mirroring the existing raw-illustration cache in `Pipeline.run()`
+      (`.pageloom_raw/`). Right now every CLI invocation re-calls the vision API even when iterating
+      repeatedly against the same example image, which burns through free-tier rate limits
+      (OpenRouter's free models are commonly capped around 20 requests/minute and 200/day)
+      unnecessarily during development.
+- [ ] Consider a `pageloom check-vision` (or similarly named) CLi subcommand that does a one-shot
+      smoke test of the configured vision provider/model and reports success/failure clearly, so users
+      can validate their free OpenRouter (or OpenAI/Anthropic) setup once before a full generation run
+      instead of discovering a misconfiguration mid-generation.
+- [x] Confirmed already implemented, no action needed: vision analysis is NOT OpenRouter-only --
+      `PageVisionAnalyzer` reuses the same three-provider abstraction as text content generation
+      (`PROVIDER_MAP` in `content_generator.py`), so `--vision-provider openai` (using the
+      vision-capable `gpt-4o-mini`) and `--vision-provider anthropic` (using the vision-capable
+      `claude-3-haiku-20240307`) both work today; OpenRouter's free `openrouter/free` auto-router is
+      only the *default* because free-tier operation was the explicit priority.
+- [x] Confirmed already true, no action needed: actual illustration generation (the artwork drawn
+      for each page) continues to run 100% locally via the Hugging Face `diffusers` Stable Diffusion
+      pipeline (`IllustrationGenerator`), completely unchanged by Milestone 5. Vision analysis is a
+      separate, small, one-time-per-run API call used only to understand the example page's
+      structure/content -- it does not touch or replace local image generation, which remains free,
+      private, and offline-capable (aside from the initial model download).
+
 ## Discovered
 - [x] Add safe image-return guard and error handling to generator for empty pipeline results or failed model loads
 - [x] Page-structure classifier was implemented as a dependency of the consistency guard (Milestone 4); the full structural routing through the pipeline and README updates remain
