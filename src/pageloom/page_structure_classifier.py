@@ -31,42 +31,26 @@ class PageStructureClassifier:
         width, height = target.size
         aspect = width / max(height, 1)
 
-        # If analyzing the original source image with a description, use the
-        # description for pattern inference. Otherwise infer purely from image.
-        is_source = image is None or (self.image is not None and image is self.image)
-        if not is_source and self.image is not None and image is not None:
-            # Compare pixel data to detect same image even if different objects
-            try:
-                if target.tobytes() == self.image.tobytes():
-                    is_source = True
-            except (AttributeError, TypeError):
-                pass
-        if is_source:
-            desc = (self.description or "").lower()
-            if "object" in desc or "name" in desc or "naming" in desc:
-                content_pattern = "object_name_pair"
-            elif (
-                "scene" in desc
-                or "multi" in desc
-                or "grid" in desc
-                or "puzzle" in desc
-                or "matching" in desc
-            ):
-                content_pattern = "multi_item_scene"
-            elif "letter" in desc or "alphabet" in desc or "word" in desc:
-                content_pattern = "single_letter_word_illustration"
-            else:
-                if aspect > 1.5 or width > 700:
-                    content_pattern = "multi_item_scene"
-                else:
-                    content_pattern = "single_letter_word_illustration"
+        # Always use description for pattern inference if available; image
+        # heuristics supplement when the description is absent or ambiguous.
+        desc = (self.description or "").lower()
+        if "object" in desc or "name" in desc or "naming" in desc:
+            content_pattern = "object_name_pair"
+        elif (
+            "scene" in desc
+            or "multi" in desc
+            or "grid" in desc
+            or "puzzle" in desc
+            or "matching" in desc
+        ):
+            content_pattern = "multi_item_scene"
+        elif "letter" in desc or "alphabet" in desc or "word" in desc:
+            content_pattern = "single_letter_word_illustration"
         else:
-            # Pure image-based inference for generated/conformance checks
+            # Fallback to image heuristics when no description pattern matches.
             if aspect > 1.5 or width > 700:
                 content_pattern = "multi_item_scene"
             else:
-                # Check for high text density or simple centered composition
-                # Heuristic: simple pages tend to be single-element
                 content_pattern = "single_letter_word_illustration"
 
         # Structural attributes derived from heuristics
