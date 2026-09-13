@@ -46,6 +46,37 @@ def test_cli_pages_less_than_one():
     assert result == 1
 
 
+def test_cli_pages_within_limit(tmp_path: Path):
+    """Using the full available content list works."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (512, 512), color="purple")
+    img.save(img_path)
+    with patch("pageloom.cli.Pipeline") as mock_pipeline:
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "output.pdf"
+        result = main(
+            [
+                "generate",
+                "--pages",
+                str(len(DEFAULT_CONTENTS)),
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        assert result == 0
+        contents = mock_instance.run.call_args.kwargs.get("contents")
+        assert len(contents) == len(DEFAULT_CONTENTS)
+
+
+def test_cli_pages_exceeds_content():
+    """Requesting more pages than available raises a clear error."""
+    result = main(["generate", "--pages", str(len(DEFAULT_CONTENTS) + 1)])
+    assert result == 1
+
+
 def test_cli_no_subcommand():
     result = main([])
     assert result == 1
