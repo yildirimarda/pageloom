@@ -206,7 +206,7 @@
       (openrouter/free), which selects one automatically -- see README for how to find vision-capable
       models."` Today the user still gets the raw underlying error message (not silence), so this is a
       clarity improvement, not a bug fix.
-- [ ] Document in README.md, concretely, how to find current free vision-capable models on OpenRouter:
+- [x] Document in README.md, concretely, how to find current free vision-capable models on OpenRouter:
       (a) https://openrouter.ai/models filtered by input modality "image", or
       https://openrouter.ai/collections/vision-models for a maintained list across all providers
       (paid and free); (b) as of this writing (Sept 2026) free vision-capable models observed include
