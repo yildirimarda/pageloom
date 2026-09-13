@@ -76,6 +76,71 @@ Environment variables you can set:
 - `PAGELOOM_OUTPUT_DIR` — default output directory for generated PDFs.
 - `CUDA_VISIBLE_DEVICES` — restrict CUDA devices in Docker
 
+## LLM Provider Configuration
+
+PageLoom supports an optional LLM-based content generator for arbitrary page topics when the requested page count exceeds the built-in content list. It works with three providers: OpenAI (`openai`), Anthropic (`anthropic`), and OpenRouter (`openrouter`).
+
+### Environment Variables
+
+- `PAGELOOM_LLM_PROVIDER` — selected provider (`openai`, `anthropic`, `openrouter`; default: `openai`).
+- `PAGELOOM_LLM_API_KEY` — generic API key override (used as fallback when the provider-specific key is not set).
+- `OPENAI_API_KEY` — OpenAI provider key.
+- `ANTHROPIC_API_KEY` — Anthropic provider key.
+- `OPENROUTER_API_KEY` — OpenRouter provider key.
+- `PAGELOOM_LLM_MODEL` — default OpenAI model ID (`gpt-4o-mini`).
+- `ANTHROPIC_LLM_MODEL` — Anthropic model ID (`claude-3-haiku-20240307`).
+- `OPENROUTER_LLM_MODEL` — OpenRouter model ID (`openai/gpt-4o-mini`).
+- `PAGELOOM_LLM_ENDPOINT` — custom endpoint URL (mainly for OpenRouter or OpenAI-compatible proxies).
+
+If the selected provider's API key is missing at startup, `LLMContentGenerator` raises a clear `RuntimeError` naming the expected environment variables instead of silently falling back.
+
+### CLI Flags
+
+The CLI wrapper (`pageloom generate --pages N`) supports:
+
+- `--use-llm` — enable LLM-based content generation when `--pages` exceeds the available built-in list.
+- `--llm-provider {openai,anthropic,openrouter}` — override the provider selected by `PAGELOOM_LLM_PROVIDER`.
+
+Example:
+
+```bash
+# Generate 30 pages with Anthropic when the built-in alphabet list (26) is exceeded
+pageloom generate --pages 30 --use-llm --llm-provider anthropic --example example.png
+```
+
+### Per-Provider Default Models
+
+Each provider has its own default model setting so the model isn't hardcoded in code:
+
+- OpenAI: `gpt-4o-mini` (set via `PAGELOOM_LLM_MODEL`)
+- Anthropic: `claude-3-haiku-20240307` (set via `ANTHROPIC_LLM_MODEL`)
+- OpenRouter: `openai/gpt-4o-mini` (set via `OPENROUTER_LLM_MODEL`)
+
+These can be overridden per provider through the environment variables above or by passing `model` explicitly to `LLMContentGenerator`.
+
+### Error Handling
+
+If an LLM API call fails — for example due to a rate limit, timeout, invalid key, or truncated response — `LLMContentGenerator.generate()` raises a `RuntimeError` with a message identifying the provider and the specific failure type (rate limit, timeout, invalid/missing key, or insufficient content). The CLI catches these and prints an error to stderr (`Error: LLM content generation failed: ...`) rather than silently defaulting to the built-in content list.
+
+## Supported Page Structures
+
+`PageStructureClassifier` determines the structural content pattern of an example page. Three structures are currently supported:
+
+- `single_letter_word_illustration` — a single letter/word with an illustration (default for standard alphabet-style pages). Content is routed through a single-item centered layout (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
+- `object_name_pair` — a photo-realistic object with its name label (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
+- `multi_item_scene` — a themed scene with multiple labeled items, such as a grid or puzzle (`element_count` inferred from image width, `arrangement: grid`, `text_image_relationship: label_per_image`).
+
+The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`).
+
+### Adding a New Structure Type
+
+To add a new page structure:
+
+1. Update `PageStructureClassifier.classify()` in `src/pageloom/page_structure_classifier.py` to detect the new pattern (e.g., from the image description or visual heuristics) and return a new `content_pattern` value along with the appropriate `element_count`, `arrangement`, and `text_image_relationship`.
+2. Add a new prompt branch in `LLMContentGenerator.generate()` in `src/pageloom/content_generator.py` for the new `content_pattern`, defining how content words/topics should be generated for that structure.
+3. Update this README to document the new structure and its structural attributes.
+4. Add a test in `tests/test_content_generator.py` verifying the new pattern produces content with the correct request shape (similar to `test_llm_content_generator_routed_by_object_name_pair`).
+
 ## CLI Usage Examples
 
 PageLoom is primarily used as a library via the `Pipeline` class in Python scripts or notebooks.
