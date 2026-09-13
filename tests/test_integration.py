@@ -198,3 +198,37 @@ def test_multi_sub_image_compositing_for_multiple_labels(tmp_path: Path):
     # The pipeline should have called generate 3 times (one per element)
     # for the single content item with element_count=3
     assert mock_gen.generate.call_count == 3
+
+    # Verify the composited page image contains 3 sub-images and text labels.
+    # We intercept the pages list before PDF compilation to inspect them directly.
+    captured_pages: list[Image.Image] = []
+    original_compile = pipeline.compiler.compile
+
+    def capturing_compile(pages, output_path):
+        captured_pages.extend(pages)
+        return original_compile(pages, output_path)
+
+    pipeline.compiler.compile = capturing_compile  # type: ignore[method-assign]
+
+    # Rerun with the same settings; the mock will return the same sub-images.
+    mock_gen.reset_mock()
+    mock_gen.generate.side_effect = make_sub_image
+    pipeline.run(
+        contents=["apple, banana, cherry"],
+        themes=["nature"],
+        output_path=str(tmp_path / "multi_composite2.pdf"),
+        page_format="standard",
+    )
+
+    assert len(captured_pages) == 1
+    final_image = captured_pages[0]
+    assert final_image.size == (612, 612)
+
+    # Confirm the image contains multiple distinct colors (sub-images) and dark text.
+    pixels = list(final_image.getdata())
+    unique_colors = set(pixels)
+    dark_pixels = sum(1 for p in pixels if p[0] < 80 and p[1] < 80 and p[2] < 80)
+    assert dark_pixels > 0, "Text overlay should add dark pixels"
+    assert len(unique_colors) > 3, (
+        f"Expected multiple colors from composited sub-images, got {len(unique_colors)}"
+    )
