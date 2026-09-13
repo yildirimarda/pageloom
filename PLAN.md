@@ -281,7 +281,7 @@ placeholder images.
       type, confirm the generated additional pages are structurally consistent with the example (right
       number of elements, right label style), and confirm nothing silently fell back to the heuristic
       classifier without the user being told (check stderr for fallback warnings).
-- [ ] Re-verify the "provider error messages fixed" item: confirm the exact user-facing strings for a
+- [x] Re-verify the "provider error messages fixed" item: confirm the exact user-facing strings for a
       rate limit, a timeout, an invalid key, and a "model doesn't support images" failure across all
       three providers (OpenAI, Anthropic, OpenRouter) read as intended (readable provider names, not
       Python class names like `OpenAIProvider`) by triggering each condition (mocked is fine here,
