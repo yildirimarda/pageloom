@@ -46,7 +46,7 @@ Look at the image and respond with ONLY a JSON object (no markdown fences, no co
   "example_content_items": ["<the actual word/number/label(s) visible on THIS page>", "..."]
 }
 
-Base "example_content_items" strictly on what is actually visible/legible on the page (e.g. if the page shows the number "3" next to three ducks, an example item could be "3 ducks"). If you cannot read any text, infer a reasonable label from the illustration instead. Respond with the JSON object only, nothing else."""
+Base "example_content_items" strictly on what is actually visible/legible on the page (e.g. if the page shows the number "3" next to three ducks, an example item could be "3 ducks"). If you cannot read any text, infer a reasonable label from the illustration instead. IMPORTANT: respond with ONLY the JSON object — no extra text, no explanation, no markdown fences, even if you are rate-limited or interrupted."""
 
 _REQUIRED_FIELDS = [
     "content_pattern",

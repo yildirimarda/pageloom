@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Protocol
 
 from pageloom import settings
@@ -25,6 +26,34 @@ class LLMProvider(Protocol):
         max_tokens: int,
         temperature: float = 0.2,
     ) -> str: ...
+
+
+def _retry_with_backoff(
+    callable_fn,
+    max_retries: int = 2,
+    base_delay: float = 1.0,
+    rate_limit_delay: float = 2.0,
+):
+    """Call callable_fn with retry for 429/rate-limit errors.
+
+    Assumes the endpoint works (confirmed by smoke test) and only retries
+    when a rate limit is hit (free-models-per-day-high-balance on the
+    openrouter/free tier). Non-rate-limit errors are not retried.
+    """
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return callable_fn()
+        except Exception as exc:
+            last_exc = exc
+            exc_name = exc.__class__.__name__
+            is_rate_limit = "RateLimit" in exc_name or "429" in str(exc)
+            if is_rate_limit and attempt < max_retries:
+                delay = rate_limit_delay * (2**attempt)
+                time.sleep(delay)
+                continue
+            raise
+    raise last_exc
 
 
 def _classify_provider_error(exc: Exception, provider_name: str) -> str:
@@ -81,13 +110,17 @@ class OpenAIProvider:
             api_key=self.api_key or "sk-dummy",
             base_url=self.endpoint,
         )
-        try:
-            response = client.chat.completions.create(
+
+        def _call():
+            return client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+
+        try:
+            response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.choices[0].message.content
@@ -113,8 +146,9 @@ class OpenAIProvider:
             api_key=self.api_key or "sk-dummy",
             base_url=self.endpoint,
         )
-        try:
-            response = client.chat.completions.create(
+
+        def _call():
+            return client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
@@ -128,6 +162,9 @@ class OpenAIProvider:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+
+        try:
+            response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.choices[0].message.content
@@ -163,13 +200,17 @@ class AnthropicProvider:
                 "Install it with: pip install anthropic"
             ) from exc
         client = anthropic.Anthropic(api_key=self.api_key or "sk-dummy")
-        try:
-            response = client.messages.create(
+
+        def _call():
+            return client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 messages=[{"role": "user", "content": prompt}],
             )
+
+        try:
+            response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.content[0].text if response.content else None
@@ -193,8 +234,9 @@ class AnthropicProvider:
             ) from exc
         media_type, _, b64_data = _parse_data_url(image_data_url)
         client = anthropic.Anthropic(api_key=self.api_key or "sk-dummy")
-        try:
-            response = client.messages.create(
+
+        def _call():
+            return client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -215,6 +257,9 @@ class AnthropicProvider:
                     }
                 ],
             )
+
+        try:
+            response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.content[0].text if response.content else None
@@ -259,13 +304,17 @@ class OpenRouterProvider:
             api_key=self.api_key or "sk-dummy",
             base_url=self.endpoint,
         )
-        try:
-            response = client.chat.completions.create(
+
+        def _call():
+            return client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+
+        try:
+            response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.choices[0].message.content
@@ -291,8 +340,9 @@ class OpenRouterProvider:
             api_key=self.api_key or "sk-dummy",
             base_url=self.endpoint,
         )
-        try:
-            response = client.chat.completions.create(
+
+        def _call():
+            return client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
@@ -306,6 +356,9 @@ class OpenRouterProvider:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+
+        try:
+            response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.__class__.__name__)) from exc
         raw = response.choices[0].message.content
