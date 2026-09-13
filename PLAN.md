@@ -260,7 +260,7 @@ placeholder images.
       the real pass/fail output. This session's own sandbox could not do this (wrong Python version,
       no network to GitHub/PyPI), so this has still never actually been confirmed by anyone with a
       working environment -- confirm it now for real.
-- [ ] Re-verify the "multi-sub-image compositing" item line by line against the actual
+- [x] Re-verify the "multi-sub-image compositing" item line by line against the actual
       `TextOverlay`/`Pipeline`/`IllustrationGenerator` code: does it really generate one illustration
       per element and composite them with multiple independent text labels on one canvas, or does it
       only handle a narrower case? Produce a real generated PDF page for a `multiple_labels` structure
