@@ -22,7 +22,7 @@
 - [x] Verify macOS MPS backend acceleration runs the same pipeline via plain Python or uv with no code changes
 - [x] Verify the chosen Stable Diffusion model's license (e.g. CreativeML OpenRAIL-M) permits commercial use before generated images go into a book intended for sale
 - [x] Add caching/resume support so already-generated raw illustrations are skipped on rerun unless a `--force` flag is passed (saves time during iteration)
-- [ ] Support environment-variable overrides for key settings (model id, device, output dir, HF cache dir) so Docker and local runs can differ in config without code changes
+- [x] Support environment-variable overrides for key settings (model id, device, output dir, HF cache dir) so Docker and local runs can differ in config without code changes
 - [ ] Document and handle first-time model download/caching (e.g. HF_HOME volume) so Docker builds don't re-download weights on every run
 - [ ] Expand test coverage with unit tests for the style-prompt builder, text overlay, and PDF compiler individually, not just the end-to-end integration test
 - [ ] Add an optional LLM-based content-list generator to supply arbitrary N page topics/words when the requested page count exceeds the built-in alphabet list (ties directly into the `--pages N` feature once pages > 26)

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
+from pageloom import settings
 from pageloom.pipeline import Pipeline
 
 # Default alphabet-style content list used when no explicit contents are given.
@@ -70,10 +72,12 @@ def main(argv: list[str] | None = None) -> int:
         default="example.png",
         help="Path to the example page image.",
     )
+    output_dir = settings.get_output_dir()
+    default_output = str(Path(output_dir) / "output.pdf") if output_dir else "output.pdf"
     generate_parser.add_argument(
         "--output",
         type=str,
-        default="output.pdf",
+        default=default_output,
         help="Output PDF path.",
     )
     generate_parser.add_argument(

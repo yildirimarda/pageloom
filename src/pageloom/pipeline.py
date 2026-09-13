@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from pageloom import settings
 from pageloom.generator import IllustrationGenerator
 from pageloom.overlay import TextOverlay
 from pageloom.pdf_compiler import PDFCompiler
@@ -42,12 +43,16 @@ class Pipeline:
         cache_dir: str | Path | None = None,
     ) -> Path:
         """Generate matching pages for each content item and compile to PDF."""
+        output_path_obj = Path(output_path) if output_path else Path("output.pdf")
+        output_dir = settings.get_output_dir()
+        if output_dir is not None and not output_path_obj.is_absolute():
+            output_path_obj = Path(output_dir) / output_path_obj
         themes = themes or [""] * len(contents)
         pages: list[Image.Image] = []
 
         if cache_dir is None:
-            output_path_obj = Path(output_path) if output_path else Path("output.pdf")
-            cache_dir = output_path_obj.parent / ".pageloom_raw"
+            cache_dir_path = output_path_obj.parent / ".pageloom_raw"
+            cache_dir = cache_dir_path
         else:
             cache_dir = Path(cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -75,4 +80,4 @@ class Pipeline:
 
             overlaid = self.overlay.apply(image, text=content, page_format=page_format)
             pages.append(overlaid)
-        return self.compiler.compile(pages, output_path)
+        return self.compiler.compile(pages, output_path_obj)
