@@ -143,11 +143,66 @@ def main(argv: list[str] | None = None) -> int:
         help="LLM provider to use for content generation (default: openai).",
     )
 
+    check_vision_parser = subparsers.add_parser(
+        "check-vision",
+        help="Smoke-test the vision provider/model (one-shot validation).",
+    )
+    check_vision_parser.add_argument(
+        "--vision-provider",
+        type=str,
+        default=None,
+        choices=["openai", "anthropic", "openrouter"],
+        help="Provider to smoke-test (default: openrouter).",
+    )
+    check_vision_parser.add_argument(
+        "--example",
+        type=str,
+        default="",
+        help="Optional example image path to test with; if omitted, a dummy image is used.",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()
         return 1
+
+    if args.command == "check-vision":
+        try:
+            vision_analyzer = PageVisionAnalyzer(provider=args.vision_provider)
+        except (ValueError, VisionAnalysisError) as exc:
+            print(f"FAIL: Vision provider setup failed: {exc}", file=sys.stderr)
+            return 1
+
+        print(f"Provider: {vision_analyzer.provider_name}")
+        print(f"Model:    {vision_analyzer.provider.model}")
+        if getattr(vision_analyzer.provider, "endpoint", None):
+            print(f"Endpoint: {vision_analyzer.provider.endpoint}")
+
+        # One-shot smoke test: use the provided example or a temporary dummy PNG.
+        import tempfile
+
+        from PIL import Image
+
+        if args.example:
+            test_image_path = args.example
+        else:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                test_image_path = f.name
+            Image.new("RGB", (256, 256), color="red").save(test_image_path)
+
+        try:
+            result = vision_analyzer.analyze(source=test_image_path, description="")
+            print(f"Smoke test: PASS (vision analysis returned {len(result)} fields)")
+            print(f"Detected pattern: {result.get('content_pattern', 'N/A')}")
+            print(f"Element count:   {result.get('element_count', 'N/A')}")
+            return 0
+        except VisionAnalysisError as exc:
+            print(f"FAIL: Vision smoke test failed: {exc}", file=sys.stderr)
+            return 1
+        except (ValueError, OSError) as exc:
+            print(f"FAIL: Unexpected error during smoke test: {exc}", file=sys.stderr)
+            return 1
 
     if args.command != "generate":
         parser.print_help()
