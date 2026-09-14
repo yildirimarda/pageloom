@@ -308,4 +308,31 @@ placeholder images.
 - [x] Full multi-sub-image compositing for `multiple_labels`: generate one illustration per element (`element_count`) and composite onto a single canvas with multiple `TextOverlay` placements, rather than the current one-image-one-label architecture.
 - [x] Audit follow-up: `tests/test_integration.py::test_two_structurally_different_example_pages` constructed `Pipeline`/`ConsistencyGuard` for the "object-naming" example without a `description`, so it silently fell back to `multi_item_scene` inference and asserted that instead of `object_name_pair` — the test never actually exercised the structure it claimed to prove. Fixed by passing `description="object name pair"` (matching the classification step earlier in the same test) through to `Pipeline` and `ConsistencyGuard`.
 <!-- work found while building; appended by the agent -->
+
+## Milestone 8: Fix real-run crash — generation width/height not divisible by 8
+- [ ] `Pipeline.run()` (`src/pageloom/pipeline.py:75-76`) sets the Stable Diffusion generation
+      width/height directly from `self.style.get("composition", {}).get("page_dimensions", ...)`,
+      which is derived from the example image's raw pixel size
+      (`page_structure_classifier.py:32`, `width, height = target.size`) with no rounding. Diffusers'
+      VAE requires both dimensions to be a multiple of 8, or `check_inputs()` raises `ValueError`.
+      Reproduced end-to-end with a real run: `uv run pageloom generate --pages 1 --example
+      letter-a-writing-practice-worksheet-618x800.jpg --use-llm --output out.pdf` crashed with
+      `ValueError: height and width have to be divisible by 8 but are 800 and 618` (800 ÷ 8 = 100 OK,
+      618 ÷ 8 = 77.25 not OK), traced through `pipeline.py:206` → `generator.py:73` →
+      `diffusers/pipelines/stable_diffusion/pipeline_stable_diffusion.py:639`.
+- [ ] No existing test catches this: every integration test (`tests/test_integration.py`) uses a
+      `MagicMock` generator (`mock_gen.generate.side_effect = make_image`) that ignores whatever
+      width/height it's called with, so the real diffusers dimension check is never exercised. Even
+      the hardcoded fallback default (612×612 in `pipeline.py:75-76`) is not divisible by 8
+      (612 ÷ 8 = 76.5) — this is a general bug, not specific to one image, and would crash on any
+      example image whose pixel size isn't already a multiple of 8 once real Stable Diffusion runs.
+- [ ] Fix: round width/height to the nearest multiple of 8 (e.g. `((dim + 7) // 8) * 8`, or round down
+      to avoid growing past the source aspect ratio too much) before passing to
+      `IllustrationGenerator.generate()`. Audit every place `page_dimensions` is derived from an
+      example image and feeds into a real (non-mocked) diffusers call, not just this one call site —
+      check `style.py` and `pipeline.py` together.
+- [ ] Add a regression test that does not mock away the bug: either unit-test the new
+      dimension-rounding helper directly with known odd inputs (e.g. 618×800 → both outputs divisible
+      by 8), or update an integration test's mock generator to assert it was called with
+      `width % 8 == 0 and height % 8 == 0`, so this class of bug can't silently regress again.
 <!-- audit pass (2026-09-13): verified every checked item above against the actual code paths listed in this file, not just the checklist claims. Three real gaps found and fixed (see the three "Audit follow-up" items). Everything else audited -- multi-provider LLM abstraction, per-provider default models, credential/error handling, license verification, CPU/CUDA/MPS device selection, caching/resume, env var overrides -- was confirmed genuinely implemented and backed by non-trivial tests. -->

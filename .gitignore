@@ -14,3 +14,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# local env overrides / caches (not for commit)
+.envrc
+.pageloom_vision/
+.pageloom_raw/
