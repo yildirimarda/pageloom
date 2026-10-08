@@ -66,8 +66,8 @@
         "baseURL": "http://host.docker.internal:1234/v1"
       },
       "models": {
-        "qwen3-8b": {
-          "name": "Qwen3 8B (local)"
+        "qwen/qwen3.8-27b": {
+          "name": "Qwen3.8 27B (local)"
         }
       }
     }
