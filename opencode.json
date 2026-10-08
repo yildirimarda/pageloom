@@ -41,6 +41,15 @@
       "environment": {
         "GRAPHIFY_QUERY_LOG_DISABLE": "1"
       }
+    },
+    "searxng": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-searxng"],
+      "enabled": true,
+      "timeout": 30000,
+      "environment": {
+        "SEARXNG_URL": "http://host.docker.internal:8080"
+      }
     }
   },
   "provider": {
@@ -48,6 +57,18 @@
       "options": {
         "timeout": 600000,
         "setCacheKey": true
+      }
+    },
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "http://host.docker.internal:1234/v1"
+      },
+      "models": {
+        "qwen3-8b": {
+          "name": "Qwen3 8B (local)"
+        }
       }
     }
   }

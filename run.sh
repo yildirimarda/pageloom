@@ -253,6 +253,7 @@ mkdir -p logs
 # ── Docker wrappers ──────────────────────────────────────────────────────────
 in_container() {
   docker run --rm \
+    --add-host=host.docker.internal:host-gateway \
     -v "$REPO_DIR:/work" \
     -v agent-cache:/home/agent/.cache \
     -v agent-claude-home:/home/agent/.claude \
