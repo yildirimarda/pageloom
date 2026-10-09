@@ -310,7 +310,7 @@ placeholder images.
 <!-- work found while building; appended by the agent -->
 
 ## Milestone 8: Fix real-run crash — generation width/height not divisible by 8
-- [ ] `Pipeline.run()` (`src/pageloom/pipeline.py:75-76`) sets the Stable Diffusion generation
+- [x] `Pipeline.run()` (`src/pageloom/pipeline.py:75-76`) sets the Stable Diffusion generation
       width/height directly from `self.style.get("composition", {}).get("page_dimensions", ...)`,
       which is derived from the example image's raw pixel size
       (`page_structure_classifier.py:32`, `width, height = target.size`) with no rounding. Diffusers'
