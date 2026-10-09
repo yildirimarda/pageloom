@@ -16,6 +16,22 @@ from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
 
 
+def round_to_multiple(dim: int, base: int = 8) -> int:
+    """Round a dimension up to the nearest multiple of ``base``.
+
+    Stable Diffusion's VAE requires both generation dimensions to be multiples
+    of 8, or ``check_inputs()`` raises ``ValueError``. Example-page dimensions
+    come from the source image's raw pixel size and are not guaranteed to
+    satisfy that constraint, so every dimension passed to
+    ``IllustrationGenerator.generate()`` must be rounded first. Rounds up by at
+    most ``base - 1`` pixels, keeping the page close to the example's size and
+    aspect ratio.
+    """
+    if base <= 0:
+        raise ValueError("base must be positive")
+    return ((int(dim) + base - 1) // base) * base
+
+
 class Pipeline:
     """Generate pages by inferring style and layout from an example page."""
 
@@ -72,8 +88,16 @@ class Pipeline:
             output_path_obj = Path(output_dir) / output_path_obj
         themes = themes or [""] * len(contents)
         pages: list[Image.Image] = []
-        width = self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
-        height = self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
+        # Example-page dimensions are taken verbatim from the source image and
+        # are not guaranteed to be multiples of 8, which Stable Diffusion's VAE
+        # requires. Round every dimension that reaches the generator so real
+        # (non-mocked) runs never hit `check_inputs()`' ValueError.
+        width = round_to_multiple(
+            self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
+        )
+        height = round_to_multiple(
+            self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
+        )
 
         if cache_dir is None:
             cache_dir_path = output_path_obj.parent / ".pageloom_raw"
@@ -129,8 +153,8 @@ class Pipeline:
                     # Generate sub-image (skip individual sub-caching for simplicity)
                     sub_image = self.generator.generate(
                         prompt=sub_prompt,
-                        width=sub_w,
-                        height=sub_h,
+                        width=round_to_multiple(sub_w),
+                        height=round_to_multiple(sub_h),
                     )
                     sub_images.append(sub_image)
 

@@ -222,7 +222,10 @@ def test_multi_sub_image_compositing_for_multiple_labels(tmp_path: Path):
 
     assert len(captured_pages) == 1
     final_image = captured_pages[0]
-    assert final_image.size == (612, 612)
+    # Example page is 612x612; the pipeline rounds page dimensions up to the
+    # nearest multiple of 8 (616) so real Stable Diffusion runs never hit the
+    # VAE's "divisible by 8" check (see Milestone 8).
+    assert final_image.size == (616, 616)
 
     # Confirm the image contains multiple distinct colors (sub-images) and dark text.
     pixels = list(final_image.getdata())
