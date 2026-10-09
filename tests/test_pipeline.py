@@ -3,7 +3,27 @@ from unittest.mock import MagicMock, patch
 
 from PIL import Image
 
-from pageloom.pipeline import Pipeline
+from pageloom.pipeline import Pipeline, round_to_multiple
+
+
+def test_round_to_multiple_returns_multiple_of_8():
+    assert round_to_multiple(618) == 624  # the exact crash case from the bug report
+    assert round_to_multiple(800) == 800
+    assert round_to_multiple(612) == 616  # existing default page size was not divisible by 8
+    assert round_to_multiple(624) == 624  # already a multiple
+    assert round_to_multiple(0) == 0
+    assert round_to_multiple(1) == 8
+    for dim in range(100):
+        assert round_to_multiple(dim) % 8 == 0
+        assert 0 <= round_to_multiple(dim) - dim < 8
+
+
+def test_round_to_multiple_rejects_non_positive_base():
+    try:
+        round_to_multiple(100, base=0)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for base=0")
 
 
 def test_pipeline_detects_page_structure_from_example(tmp_path: Path):
@@ -149,3 +169,78 @@ def test_pipeline_run_force_regenerates(mock_compile, tmp_path: Path):
     )
     assert isinstance(result, Path)
     assert mock_gen.generate.call_count == 2
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_generate_dims_divisible_by_8_for_odd_source_size(mock_compile, tmp_path: Path):
+    """A 618x800 example (618 not divisible by 8) must never reach the
+    generator with non-multiple-of-8 dimensions, or real Stable Diffusion's VAE
+    check_inputs() would raise ValueError (Milestone 8 regression)."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (618, 800), color="green")
+    img.save(img_path)
+
+    called_with: list[tuple[int, int]] = []
+
+    def make_image(prompt: str, **kwargs) -> Image.Image:
+        w = kwargs.get("width", 512)
+        h = kwargs.get("height", 512)
+        called_with.append((int(w), int(h)))
+        return Image.new("RGB", (w, h), color="red")
+
+    mock_gen = MagicMock()
+    mock_gen.generate.side_effect = make_image
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    pipeline.run(
+        contents=["apple", "banana"],
+        output_path=str(tmp_path / "output.pdf"),
+    )
+
+    assert mock_gen.generate.call_count == 2
+    assert called_with, "generator should have been called"
+    for w, h in called_with:
+        assert w % 8 == 0 and h % 8 == 0, f"generator called with non-multiple-of-8 size {w}x{h}"
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_multiple_labels_sub_images_dims_divisible_by_8(mock_compile, tmp_path: Path):
+    """The multi-sub-image path derives sub-image sizes via division, which can
+    produce non-multiples of 8 (e.g. 800 // 3 == 266); those must also be
+    rounded before reaching the generator."""
+    img_path = tmp_path / "example.png"
+    img = Image.new("RGB", (618, 800), color="yellow")
+    img.save(img_path)
+
+    called_with: list[tuple[int, int]] = []
+
+    def make_sub_image(prompt: str, **kwargs) -> Image.Image:
+        w = kwargs.get("width", 512)
+        h = kwargs.get("height", 512)
+        called_with.append((int(w), int(h)))
+        return Image.new("RGB", (w, h), color="blue")
+
+    mock_gen = MagicMock()
+    mock_gen.generate.side_effect = make_sub_image
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    pipeline = Pipeline(
+        example_image=str(img_path),
+        generator=mock_gen,
+        page_structure={
+            "content_pattern": "multi_item_scene",
+            "element_count": 3,
+            "arrangement": "column",
+            "text_image_relationship": "multiple_labels",
+        },
+    )
+    pipeline.run(
+        contents=["apple, banana, cherry"],
+        output_path=str(tmp_path / "output.pdf"),
+    )
+
+    assert mock_gen.generate.call_count == 3
+    assert called_with, "generator should have been called"
+    for w, h in called_with:
+        assert w % 8 == 0 and h % 8 == 0, f"generator called with non-multiple-of-8 size {w}x{h}"
