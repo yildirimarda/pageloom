@@ -213,3 +213,26 @@ def test_illustration_generator_init_model_load_failure(mock_mps, mock_cuda, moc
     except RuntimeError as exc:
         assert "Failed to load Stable Diffusion model" in str(exc)
         assert "model not found" in str(exc)
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_production_generator_disables_safety_checker(mock_mps, mock_cuda, mock_from_pretrained):
+    """The production IllustrationGenerator must disable SD1.5's NSFW safety checker.
+
+    Regression guard for the 2026-10 audit finding (PLAN.md "Discovered"): SD1.5's
+    default safety checker false-positives on benign children's-book subjects
+    (e.g. "apple", "banana", "cherry") and returns a fully-black image -- verified
+    live: a "red apple on a white background" prompt produced 100% dark pixels.
+    That would black out every page of a real `pageloop generate` PDF, so the
+    checker is disabled in the production generator (the same workaround the
+    evidence script uses). This unit test locks that in for the default code path.
+    """
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    gen = IllustrationGenerator(verify_license=False)
+    assert gen.pipeline.safety_checker is None
