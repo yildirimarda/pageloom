@@ -154,9 +154,11 @@ def test_cli_pages_within_full_built_in_list_never_calls_llm(tmp_path: Path):
     img.save(img_path)
 
     with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
         patch("pageloom.cli.Pipeline") as mock_pipeline,
         patch("pageloom.cli.LLMContentGenerator") as mock_llm_gen,
     ):
+        mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
         mock_instance = MagicMock()
         mock_pipeline.return_value = mock_instance
         mock_instance.run.return_value = tmp_path / "output.pdf"
@@ -199,9 +201,11 @@ def test_cli_use_llm_extends_past_full_built_in_list(tmp_path: Path):
     sys.modules["openai"] = mock_openai_module
     try:
         with (
+            patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
             patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
             patch("pageloom.cli.Pipeline") as mock_pipeline,
         ):
+            mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
             mock_instance = MagicMock()
             mock_pipeline.return_value = mock_instance
             mock_instance.run.return_value = tmp_path / "output.pdf"
@@ -249,9 +253,11 @@ def test_cli_use_llm_exceeds_full_content_list(tmp_path: Path):
     sys.modules["openai"] = mock_openai_module
     try:
         with (
+            patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
             patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
             patch("pageloom.cli.Pipeline") as mock_pipeline,
         ):
+            mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
             mock_instance = MagicMock()
             mock_pipeline.return_value = mock_instance
             mock_instance.run.return_value = tmp_path / "output.pdf"
