@@ -50,6 +50,7 @@ def test_cli_generate_pages_param(tmp_path: Path):
             description="",
             page_structure=detected_structure,
             vision_analyzer=mock_vision_cls.return_value,
+            verify_consistency=True,
         )
         call_args = mock_instance.run.call_args
         assert call_args is not None
@@ -449,6 +450,7 @@ def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
             description="object name pair",
             page_structure=detected_structure,
             vision_analyzer=None,
+            verify_consistency=True,
         )
 
 
@@ -508,6 +510,7 @@ def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
             description="",
             page_structure=vision_structure,
             vision_analyzer=mock_vision_cls.return_value,
+            verify_consistency=True,
         )
 
 
@@ -814,3 +817,50 @@ def test_cli_generate_runs_consistency_guard_with_vision_analyzer(tmp_path: Path
     assert "Consistency check: " in out.out
     assert " page(s) match the example." in out.out
     assert (tmp_path / "out.pdf").exists()
+
+
+def test_cli_no_consistency_flag_skips_check(tmp_path: Path, capsys):
+    """--no-consistency must pass verify_consistency=False to Pipeline, so no
+    guard runs (no extra vision API call per page) and no `Consistency check:`
+    summary is printed -- mirroring what --no-vision does for example analysis."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="purple").save(img_path)
+
+    vision_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "content_type_description": "a letter and word page",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+        "example_content_items": ["Apple"],
+    }
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = vision_structure
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--no-consistency",
+            ]
+        )
+        assert result == 0
+
+    # The CLI explicitly opts the pipeline out of verification.
+    assert mock_pipeline.call_args.kwargs["verify_consistency"] is False
+    assert mock_pipeline.call_args.kwargs["vision_analyzer"] is mock_vision_cls.return_value
+    # And nothing produced a `Consistency check:` line for the user.
+    out = capsys.readouterr()
+    assert "Consistency check:" not in out.out

@@ -108,6 +108,20 @@ def main(argv: list[str] | None = None) -> int:
         choices=["openai", "anthropic", "openrouter"],
         help="Provider used for automatic vision analysis (default: openrouter, free tier).",
     )
+    generate_parser.add_argument(
+        "--no-consistency",
+        action="store_true",
+        default=False,
+        help=(
+            "Skip the automatic per-page consistency check. By default every "
+            "generated page is verified against the example, which with vision "
+            "enabled re-classifies each page (one extra vision API call per "
+            "page on a first run) and prints a `Consistency check: N/M` "
+            "summary. Pass this flag to skip verification and its report "
+            "(mirrors --no-vision: same cost/reliability concern on OpenRouter's "
+            "rate-capped free tier)."
+        ),
+    )
     output_dir = settings.get_output_dir()
     default_output = str(Path(output_dir) / "output.pdf") if output_dir else "output.pdf"
     generate_parser.add_argument(
@@ -290,6 +304,9 @@ def main(argv: list[str] | None = None) -> int:
         # ConsistencyGuard so generated pages are re-classified with the same
         # method (vision or heuristic) during the automatic consistency check.
         vision_analyzer=vision_analyzer,
+        # --no-consistency opts out of that check entirely (no per-page guard
+        # call, no `Consistency check:` report).
+        verify_consistency=not args.no_consistency,
     )
     result = pipeline.run(
         contents=contents,
