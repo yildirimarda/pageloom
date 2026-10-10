@@ -19,7 +19,7 @@
 ## Milestone 3: Style consistency and pipeline portability
 - [x] Implement visual-style extractor that analyzes an example page for color palette, typography, and composition rules
 - [x] Add consistency guard that verifies generated pages match the example's illustration style and layout logic
-- [ ] Decide how ConsistencyGuard is used in real runs: wire it into the generation path (`cli.py`/`pipeline.py`), including passing the `vision_analyzer` so generated images are re-classified with the same method used for the example, plus a test proving it runs during `pageloom generate` — today the class is only ever constructed inside tests, so no real run is actually consistency-checked — or, if it is intentionally a library-only tool, say so explicitly in the README and stop implying generated pages are automatically verified
+- [x] Decide how ConsistencyGuard is used in real runs: wire it into the generation path (`cli.py`/`pipeline.py`), including passing the `vision_analyzer` so generated images are re-classified with the same method used for the example, plus a test proving it runs during `pageloom generate` — today the class is only ever constructed inside tests, so no real run is actually consistency-checked — or, if it is intentionally a library-only tool, say so explicitly in the README and stop implying generated pages are automatically verified
 - [x] Ensure Docker container runs identically on CPU or CUDA with the same Python codebase and no behavioral differences
 - [x] Verify macOS MPS backend acceleration runs the same pipeline via plain Python or uv with no code changes
 - [x] Verify the chosen Stable Diffusion model's license (e.g. CreativeML OpenRAIL-M) permits commercial use before generated images go into a book intended for sale
