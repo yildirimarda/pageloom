@@ -286,6 +286,10 @@ def main(argv: list[str] | None = None) -> int:
         example_image=args.example,
         description=args.description,
         page_structure=page_structure,
+        # Same analyzer used to classify the example: Pipeline forwards it to
+        # ConsistencyGuard so generated pages are re-classified with the same
+        # method (vision or heuristic) during the automatic consistency check.
+        vision_analyzer=vision_analyzer,
     )
     result = pipeline.run(
         contents=contents,

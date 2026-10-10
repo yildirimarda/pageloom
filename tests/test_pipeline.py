@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from PIL import Image
 
+from pageloom.consistency import ConsistencyGuard
 from pageloom.pipeline import Pipeline, round_to_multiple
 
 
@@ -244,3 +245,86 @@ def test_pipeline_multiple_labels_sub_images_dims_divisible_by_8(mock_compile, t
     assert called_with, "generator should have been called"
     for w, h in called_with:
         assert w % 8 == 0 and h % 8 == 0, f"generator called with non-multiple-of-8 size {w}x{h}"
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_run_verifies_generated_pages(mock_compile, tmp_path: Path, capsys):
+    """run() must construct a real ConsistencyGuard and verify every generated
+    page against the example, recording one result per page and reporting a
+    summary -- previously ConsistencyGuard was only ever built inside tests,
+    so no real run was consistency-checked."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    assert isinstance(pipeline.consistency_guard, ConsistencyGuard)
+
+    result = pipeline.run(
+        contents=["apple", "banana"],
+        output_path=str(tmp_path / "output.pdf"),
+    )
+
+    assert result == tmp_path / "output.pdf"
+    assert len(pipeline.consistency_results) == 2
+    for page_result in pipeline.consistency_results:
+        assert "consistent" in page_result
+        assert "issues" in page_result
+        assert "details" in page_result
+    out = capsys.readouterr()
+    assert "Consistency check: " in out.out
+    assert " page(s) match the example." in out.out
+
+
+def test_pipeline_passes_vision_analyzer_to_consistency_guard(tmp_path: Path):
+    """The pipeline's vision_analyzer must reach the guard so generated pages
+    are re-classified with the same method used for the example."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    fake_vision = MagicMock()
+    fake_vision.analyze.return_value = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+    mock_gen = MagicMock()
+
+    pipeline = Pipeline(
+        example_image=str(img_path), generator=mock_gen, vision_analyzer=fake_vision
+    )
+
+    # The example structure was classified with the vision analyzer...
+    fake_vision.analyze.assert_called_once()
+    # ...and the guard keeps it to re-classify generated pages the same way.
+    assert pipeline.consistency_guard.vision_analyzer is fake_vision
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_run_survives_consistency_guard_failure(mock_compile, tmp_path: Path):
+    """An unexpected guard error must not abort generation; it is recorded as
+    an inconsistency result instead (verification is a quality signal, not a
+    hard requirement for producing the PDF)."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    with patch("pageloom.pipeline.ConsistencyGuard") as mock_guard_cls:
+        mock_guard_cls.return_value.verify.side_effect = RuntimeError("boom")
+        pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+        result = pipeline.run(
+            contents=["apple"],
+            output_path=str(tmp_path / "output.pdf"),
+        )
+
+    assert result == tmp_path / "output.pdf"
+    assert len(pipeline.consistency_results) == 1
+    failed = pipeline.consistency_results[0]
+    assert failed["consistent"] is False
+    assert "Consistency check failed" in failed["issues"][0]
+    assert "boom" in failed["issues"][0]
