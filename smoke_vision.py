@@ -94,9 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     # Bypass the vision cache so each smoke run is a genuine live call against
     # the openrouter/free endpoint (the cache exists to spare production runs,
     # not smoke tests).
-    cache_key = hashlib.md5(
-        PageVisionAnalyzer._image_bytes(example) + b""
-    ).hexdigest()
+    cache_key = hashlib.md5(PageVisionAnalyzer._image_bytes(example) + b"").hexdigest()
     cache_file = _VISION_CACHE_DIR / (cache_key + ".json")
     if cache_file.exists():
         cache_file.unlink()

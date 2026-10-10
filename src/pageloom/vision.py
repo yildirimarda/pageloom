@@ -227,16 +227,12 @@ class PageVisionAnalyzer:
             except Exception as exc:
                 msg = str(exc).lower()
                 if "empty content" in msg:
-                    last_exc = VisionAnalysisError(
-                        f"Vision-based page analysis failed: {exc}"
-                    )
+                    last_exc = VisionAnalysisError(f"Vision-based page analysis failed: {exc}")
                     continue
                 # Rate limit / timeout / auth / network errors are not fixed
                 # by a stricter prompt; surface them immediately for the
                 # caller's fallback handling.
-                raise VisionAnalysisError(
-                    f"Vision-based page analysis failed: {exc}"
-                ) from exc
+                raise VisionAnalysisError(f"Vision-based page analysis failed: {exc}") from exc
 
             try:
                 with open(cache_path, "w", encoding="utf-8") as f:
@@ -249,9 +245,7 @@ class PageVisionAnalyzer:
 
         # All attempts failed with empty/non-JSON responses.
         if last_exc is None:  # pragma: no cover - loop only exits here via continue
-            last_exc = VisionAnalysisError(
-                "Vision-based page analysis failed unexpectedly."
-            )
+            last_exc = VisionAnalysisError("Vision-based page analysis failed unexpectedly.")
         raise last_exc
 
     @staticmethod

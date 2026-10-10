@@ -58,8 +58,7 @@ def test_smoke_vision_handles_real_free_tier_response():
     # a key, and we never silently swallow an unexpected failure.
     schema_passed = "schema validation: passed" in combined_lower
     graceful = (
-        "known graceful free-tier outcome" in combined_lower
-        or "rate limit" in combined_lower
+        "known graceful free-tier outcome" in combined_lower or "rate limit" in combined_lower
     )
     assert schema_passed or graceful, (
         "smoke_vision.py did not report a schema-valid response nor a known "
