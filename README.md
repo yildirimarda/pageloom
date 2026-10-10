@@ -165,7 +165,7 @@ Set `OPENROUTER_VISION_MODEL` to the specific model ID you want, or leave it uns
 }
 ```
 
-The `content_pattern` here is not restricted to the three legacy values below — it can be any short identifier the vision model comes up with. `content_type_description` and `example_content_items` (the actual items visible on the example page) are then used by `LLMContentGenerator.generate()` to produce new content matching that exact page type — e.g., `"4 balloons"`, `"5 stars"` for a number-counting page — via a generic, open-ended prompt rather than one of the three hardcoded branches. `ConsistencyGuard` also accepts a `vision_analyzer` so generated pages can be checked against the example using the same open-ended structure, not just the heuristic categories.
+The `content_pattern` here is not restricted to the three legacy values below — it can be any short identifier the vision model comes up with. `content_type_description` and `example_content_items` (the actual items visible on the example page) are then used by `LLMContentGenerator.generate()` to produce new content matching that exact page type — e.g., `"4 balloons"`, `"5 stars"` for a number-counting page — via a generic, open-ended prompt rather than one of the three hardcoded branches. `ConsistencyGuard` also accepts a `vision_analyzer` so generated pages can be checked against the example using the same open-ended structure, not just the heuristic categories — and `Pipeline.run()` wires this up automatically (see "Consistency Checking" below).
 
 **Vision environment variables:**
 
@@ -186,6 +186,12 @@ The `content_pattern` here is not restricted to the three legacy values below �
 When vision analysis is used instead (the default), `content_pattern` is open-ended and not limited to these three values — see the section above.
 
 The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`, or whatever `content_type_description` says for a vision-derived pattern). Additionally, `Pipeline.run()` derives the default `page_format` (`object_name` or `themed_scene`) from the detected structure when `page_format="standard"` is not explicitly overridden (other/vision-derived patterns keep the generic `standard` format).
+
+### Consistency Checking
+
+Every run automatically verifies the pages it generates against the example. `Pipeline.run()` constructs a `ConsistencyGuard` (`src/pageloom/consistency.py`) from the example's already-extracted style and detected page structure, then calls `verify()` on each finished page (after text overlay, before PDF compilation). The guard compares palette, typography scale, layout type, page dimensions, and structural conformance (content pattern, element count, arrangement, text/image relationship).
+
+The CLI passes the same `vision_analyzer` it used to classify the example into `Pipeline`, so each generated page is re-classified with the same method (vision model or heuristic) as the example — necessary for open-ended vision-derived `content_pattern` values, which the heuristic classifier alone would mismatch. After generation, a one-line summary is printed (`Consistency check: N/M page(s) match the example.`), with one stderr warning per issue on each inconsistent page; a failed check never aborts the run. Results are also available programmatically as `pipeline.consistency_results` — one result dict per generated page with `consistent`, `issues`, and `details` keys.
 
 ### Adding a New Structure Type
 
