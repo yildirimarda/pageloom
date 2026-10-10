@@ -180,7 +180,9 @@ class Pipeline:
                     )
                     sub_images.append(sub_image)
 
-                # Composite sub-images onto a single full-size canvas
+                # Composite sub-images onto a single full-size canvas.
+                # Pictures are confined to the upper ~70% so the bottom text band
+                # stays clear for the per-label words (no overlapping text).
                 composited = Image.new("RGB", (int(width), int(height)), color="white")
                 if sub_images:
                     arrangement = structure.get("arrangement", "centered")
@@ -194,8 +196,10 @@ class Pipeline:
                     else:
                         cols, rows = len(sub_images), 1
 
+                    label_band_h = max(1, int(int(height) * 0.30))
+                    pic_area_h = int(height) - label_band_h
                     cell_w = int(width) // cols if cols > 0 else int(width)
-                    cell_h = int(height) // rows if rows > 0 else int(height)
+                    cell_h = pic_area_h // rows if rows > 0 else pic_area_h
 
                     for idx, sub_img in enumerate(sub_images):
                         sub_img = sub_img.convert("RGB")
@@ -206,14 +210,14 @@ class Pipeline:
                             y = r * cell_h + (cell_h - sub_img.height) // 2
                         elif arrangement == "row":
                             x = idx * cell_w + (cell_w - sub_img.width) // 2
-                            y = (int(height) - sub_img.height) // 2
+                            y = (pic_area_h - sub_img.height) // 2
                         elif arrangement == "column":
                             x = (int(width) - sub_img.width) // 2
                             y = idx * cell_h + (cell_h - sub_img.height) // 2
                         else:
                             step = int(width) // max(1, len(sub_images))
                             x = idx * step + (step - sub_img.width) // 2
-                            y = int(height) * 2 // 3 - sub_img.height // 2
+                            y = (pic_area_h - sub_img.height) // 2
                         composited.paste(sub_img, (x, y))
 
                 # Apply text overlay with all labels on the composited canvas

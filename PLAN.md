@@ -114,4 +114,12 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
      (2026-09-13): openrouter/free reaches the endpoint ... handle 429 gracefully" — the
      429 handling it asked for is implemented and tested (_classify_provider_error), and the
      confirmation itself is superseded: as of 2026-10 the free router returns HTTP 200 with
-     empty content instead of a 429, captured by the open smoke-test items in Milestone 6. -->
+      empty content instead of a 429, captured by the open smoke-test items in Milestone 6. -->
+
+- [ ] Make the real generation smoke path tolerate (or auto-retry past) the SD1.5
+  default NSFW safety checker, which false-positives on benign children's-book
+  subjects (e.g. the words "banana"/"cherry") and returns fully-black images --
+  the generator treats the black image as a valid result and never retries, so a
+  real `multiple_labels` page can silently lose 2 of 3 illustrations. The
+  verification script works around this by disabling `safety_checker`, but the
+  production `IllustrationGenerator` does not.
