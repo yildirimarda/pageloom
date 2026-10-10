@@ -439,3 +439,50 @@ def test_analyze_does_not_retry_on_rate_limit_error(tmp_path):
         analyzer.analyze(str(img_path))
     assert len(fake.calls) == 1
     assert "rate limit" in str(exc_info.value).lower()
+
+
+def test_analyze_retries_provider_empty_content_via_mock_openai(tmp_path):
+    """Integration test: when using the real OpenAIProvider/OpenRouterProvider
+    (mocked at the module level), an empty-content response -- i.e. the provider
+    SDK returns message.content=None, which content_generator.py turns into
+    RuntimeError('Vision model returned empty content') -- on the first attempt
+    must trigger the analyze() retry with a stricter JSON-only prompt. If the
+    second attempt returns valid JSON, analyze succeeds.
+
+    This bridges the provider code in content_generator.py and the retry logic in
+    vision.py.analyze(), which the _FakeVisionProvider unit tests bypass."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+    mock_response_empty = MagicMock()
+    mock_response_empty.choices = [MagicMock(message=MagicMock(content=None))]
+    mock_response_valid = MagicMock()
+    mock_response_valid.choices = [MagicMock(message=MagicMock(content=_VALID_RETRY_JSON))]
+    mock_client.chat.completions.create.side_effect = [
+        mock_response_empty,
+        mock_response_valid,
+    ]
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+            analyzer = PageVisionAnalyzer(provider="openrouter")
+            result = analyzer.analyze(str(img_path))
+        assert result["content_pattern"] == "number_count_matching"
+        assert result["element_count"] == 3
+        assert result["example_content_items"] == ["3 ducks"]
+        # The provider was called exactly twice: initial attempt + one retry.
+        assert mock_client.chat.completions.create.call_count == 2
+        # The retry call must use the stricter "ONLY JSON" prompt suffix.
+        calls = mock_client.chat.completions.create.call_args_list
+        first_prompt = calls[0].kwargs["messages"][0]["content"][0]["text"]
+        second_prompt = calls[1].kwargs["messages"][0]["content"][0]["text"]
+        assert "MUST reply with ONLY a single JSON object" not in first_prompt
+        assert "MUST reply with ONLY a single JSON object" in second_prompt
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
