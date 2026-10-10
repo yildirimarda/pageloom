@@ -98,3 +98,13 @@ def test_readme_documents_how_to_find_free_vision_models():
     assert "google/gemma" in content or "gemma" in content.lower()
     assert "free" in content.lower()
     assert "Sept 2026" in content or "changes constantly" in content
+
+
+def test_readme_documents_consistency_opt_out():
+    """The per-page consistency check opt-out must be documented on both the
+    CLI side (--no-consistency) and the library side (verify_consistency=False)."""
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+    assert "--no-consistency" in content
+    assert "verify_consistency=False" in content
+    assert "Consistency check: N/M" in content

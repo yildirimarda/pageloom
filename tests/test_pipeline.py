@@ -328,3 +328,11 @@ def test_pipeline_run_survives_consistency_guard_failure(mock_compile, tmp_path:
     assert failed["consistent"] is False
     assert "Consistency check failed" in failed["issues"][0]
     assert "boom" in failed["issues"][0]
+
+
+def test_pipeline_verify_consistency_default_is_true(tmp_path: Path):
+    """The opt-out must be opt-in: default runs still verify pages."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    pipeline = Pipeline(example_image=str(img_path), generator=MagicMock())
+    assert pipeline.verify_consistency is True

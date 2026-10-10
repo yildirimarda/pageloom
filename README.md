@@ -103,6 +103,7 @@ The CLI wrapper (`pageloom generate --pages N`) supports:
 - `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). This is passed straight through to structure detection and `Pipeline`. Providing it is treated as an explicit override that **skips automatic vision analysis** (see below) — useful if you already know the page type and want to avoid the network call.
 - `--no-vision` — disable automatic vision-based page-structure analysis (see next section) and fall back to the image-size heuristic instead.
 - `--vision-provider {openai,anthropic,openrouter}` — provider used for automatic vision analysis (default: `openrouter`, free tier).
+- `--no-consistency` — skip the automatic per-page consistency check (see "Consistency Checking" below): no guard runs and no `Consistency check: N/M` summary is printed. Use this to avoid the extra vision API call per page that a first-run check costs (mirrors `--no-vision`, for the same rate-cap concern on the free tier).
 
 Example:
 
@@ -193,6 +194,8 @@ Every run automatically verifies the pages it generates against the example. `Pi
 
 The CLI passes the same `vision_analyzer` it used to classify the example into `Pipeline`, so each generated page is re-classified with the same method (vision model or heuristic) as the example — necessary for open-ended vision-derived `content_pattern` values, which the heuristic classifier alone would mismatch. After generation, a one-line summary is printed (`Consistency check: N/M page(s) match the example.`), with one stderr warning per issue on each inconsistent page; a failed check never aborts the run. Results are also available programmatically as `pipeline.consistency_results` — one result dict per generated page with `consistent`, `issues`, and `details` keys.
 
+**Opting out.** With vision enabled, each check re-classifies the generated page — one extra vision API call per page on a first run (the raw-illustration and vision caches only help on reruns), which matters because OpenRouter's free tier is rate-capped. Skip the check entirely with `--no-consistency` on the CLI or `Pipeline(..., verify_consistency=False)` in Python: no guard runs, `consistency_results` stays empty, and no `Consistency check:` report is printed. This mirrors `--no-vision`, which opts out of example analysis for the same cost/reliability reason.
+
 ### Adding a New Structure Type
 
 With vision analysis enabled (the default), you generally **don't need to add anything** for a new page type — the vision model describes any page type in plain language via `content_type_description`, and `LLMContentGenerator.generate()` already has a generic prompt path that uses that description directly (see "Automatic Visual Page-Structure Analysis" above).
@@ -222,8 +225,9 @@ from pathlib import Path
 # content accordingly. You can provide an optional description for more accurate
 # structural inference (e.g., "object name pair" or "alphabet letter word").
 pipeline = Pipeline(example_image="example.png", description="alphabet letter word")
+# Pass verify_consistency=False to skip the per-page consistency check
+# (avoids the extra vision API call per page on a first run).
 result = pipeline.run(
-    contents=["Apple", "Banana", "Cherry"],
     themes=["fruit", "tropical", "orchard"],
     output_path="children_book.pdf",
     page_format="standard",

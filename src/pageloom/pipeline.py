@@ -45,6 +45,7 @@ class Pipeline:
         compiler: PDFCompiler | None = None,
         page_structure: dict | None = None,
         vision_analyzer: object | None = None,
+        verify_consistency: bool = True,
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
@@ -62,11 +63,16 @@ class Pipeline:
         self.page_structure = page_structure or detect_structure(
             source=example_image, description=description, vision_analyzer=vision_analyzer
         )
-        # Consistency verification runs on every generated page. The guard is
+        # Consistency verification runs on every generated page by default
+        # (opt out with `verify_consistency=False`). The guard is
         # built from the style/structure already extracted above (no duplicate
         # analysis of the example) and receives the same `vision_analyzer` used
         # for the example so generated pages are re-classified with the same
         # method (vision or heuristic) for a like-for-like structural check.
+        # With vision enabled that costs one extra vision API call per page on
+        # a first run (the raw-illustration and vision caches only help on
+        # reruns), and OpenRouter's free tier is rate-capped -- hence the opt-out.
+        self.verify_consistency = verify_consistency
         self.vision_analyzer = vision_analyzer
         self.consistency_guard = ConsistencyGuard(
             example_style=self.style,
@@ -263,8 +269,13 @@ class Pipeline:
             pages.append(overlaid)
 
         # Verify every finished page against the example before compiling.
-        self.consistency_results = [self._verify_page(page) for page in pages]
-        self._report_consistency()
+        # Opting out skips both the guard calls (avoiding the extra vision
+        # API call per page) and the `Consistency check:` report.
+        if self.verify_consistency:
+            self.consistency_results = [self._verify_page(page) for page in pages]
+            self._report_consistency()
+        else:
+            self.consistency_results = []
         return self.compiler.compile(pages, output_path_obj)
 
     def _verify_page(self, page: Image.Image) -> dict:
