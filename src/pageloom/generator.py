@@ -56,6 +56,16 @@ class IllustrationGenerator:
         self.pipeline = self.pipeline.to(self.device)
         # Attention slicing enabled consistently for lower memory usage
         self.pipeline.enable_attention_slicing()
+        # SD1.5's bundled safety checker false-positives on benign children's-book
+        # subjects (e.g. "banana", "cherry", "apple") and blacks out the whole
+        # image, silently destroying the illustration we were asked to draw --
+        # verified live (2026-10 audit: a "red apple on a white background" prompt
+        # returned 100% black pixels). PageLoom only ever generates family-friendly
+        # content (letters, numbers, fruit, animals), so disable the safety filter
+        # to keep generated pages visually sensible. This mirrors the workaround
+        # already used by scripts/generate_real_multiple_labels.py; making it the
+        # production default is the recorded Discovered gap (see PLAN.md).
+        self.pipeline.safety_checker = None
 
     def generate(
         self,
