@@ -106,11 +106,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"API key present: yes (starts with {key[:10]}...)")
 
         analyzer = PageVisionAnalyzer(provider="openrouter")
-        print(f"Provider: openrouter")
+        print("Provider: openrouter")
         print(f"Model:    {analyzer.provider.model}")
         endpoint = getattr(analyzer.provider, "endpoint", None)
         print(f"Endpoint: {endpoint}")
-        print(f"Retries on empty/non-JSON: 1 (stricter 'ONLY JSON' prompt)")
+        print("Retries on empty/non-JSON: 1 (stricter 'ONLY JSON' prompt)")
 
         # Confirm image encoding produces a valid data URL.
         b64_url = analyzer._encode_image(example)
