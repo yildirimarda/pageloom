@@ -57,6 +57,18 @@
       "options": {
         "timeout": 600000,
         "setCacheKey": true
+      },
+      "models": {
+        "deepseek/deepseek-v4-flash-0731": {
+          "options": {
+            "provider": { "order": ["deepinfra"], "allow_fallbacks": false }
+          }
+        },
+        "xiaomi/mimo-v2.6-flash": {
+          "options": {
+            "provider": { "order": ["makora"], "allow_fallbacks": false }
+          }
+        }
       }
     },
     "lmstudio": {
