@@ -336,11 +336,3 @@ def test_pipeline_verify_consistency_default_is_true(tmp_path: Path):
     Image.new("RGB", (512, 512), color="purple").save(img_path)
     pipeline = Pipeline(example_image=str(img_path), generator=MagicMock())
     assert pipeline.verify_consistency is True
-
-
-def test_pipeline_verify_consistency_default_is_true(tmp_path: Path):
-    """The opt-out must be opt-in: default runs still verify pages."""
-    img_path = tmp_path / "example.png"
-    Image.new("RGB", (512, 512), color="purple").save(img_path)
-    pipeline = Pipeline(example_image=str(img_path), generator=MagicMock())
-    assert pipeline.verify_consistency is True
