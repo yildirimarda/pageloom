@@ -64,6 +64,18 @@ def _classify_failure(msg: str) -> str:
         or "unexpected json shape" in low
     ):
         return "non-JSON output (openrouter/free routed to a non-vision/safety model)"
+    # Defense-in-depth: the openrouter/free auto-router may return HTTP 200
+    # with null/empty response fields (choices=None, empty choices, etc.),
+    # which surfaces as SDK-level TypeErrors/IndexErrors/AttributeErrors
+    # rather than the clean "empty content" message. Treat these as the same
+    # known graceful free-tier outcome.
+    if (
+        "nonetype" in low
+        or "not subscriptable" in low
+        or "has no attribute" in low
+        or "list index out of range" in low
+    ):
+        return "empty content (openrouter/free routed to a non-vision/safety model)"
     return "unexpected error"
 
 

@@ -125,7 +125,10 @@ class OpenAIProvider:
             response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
-        raw = response.choices[0].message.content
+        try:
+            raw = response.choices[0].message.content
+        except (IndexError, TypeError, AttributeError):
+            raw = None
         if raw is None:
             raise RuntimeError("LLM returned empty content")
         return raw
@@ -169,7 +172,10 @@ class OpenAIProvider:
             response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
-        raw = response.choices[0].message.content
+        try:
+            raw = response.choices[0].message.content
+        except (IndexError, TypeError, AttributeError):
+            raw = None
         if raw is None:
             raise RuntimeError("Vision model returned empty content")
         return raw
@@ -217,7 +223,10 @@ class AnthropicProvider:
             response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
-        raw = response.content[0].text if response.content else None
+        try:
+            raw = response.content[0].text if response.content else None
+        except (IndexError, TypeError, AttributeError):
+            raw = None
         if raw is None:
             raise RuntimeError("LLM returned empty content")
         return raw
@@ -266,7 +275,10 @@ class AnthropicProvider:
             response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
-        raw = response.content[0].text if response.content else None
+        try:
+            raw = response.content[0].text if response.content else None
+        except (IndexError, TypeError, AttributeError):
+            raw = None
         if raw is None:
             raise RuntimeError("Vision model returned empty content")
         return raw
@@ -323,7 +335,10 @@ class OpenRouterProvider:
             response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
-        raw = response.choices[0].message.content
+        try:
+            raw = response.choices[0].message.content
+        except (IndexError, TypeError, AttributeError):
+            raw = None
         if raw is None:
             raise RuntimeError("LLM returned empty content")
         return raw
@@ -367,7 +382,10 @@ class OpenRouterProvider:
             response = _retry_with_backoff(_call)
         except Exception as exc:
             raise RuntimeError(_classify_provider_error(exc, self.provider_name)) from exc
-        raw = response.choices[0].message.content
+        try:
+            raw = response.choices[0].message.content
+        except (IndexError, TypeError, AttributeError):
+            raw = None
         if raw is None:
             raise RuntimeError("Vision model returned empty content")
         return raw
