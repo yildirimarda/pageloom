@@ -9,6 +9,21 @@ from pageloom.cli import DEFAULT_CONTENTS, main
 from pageloom.consistency import ConsistencyGuard
 from pageloom.vision import VisionAnalysisError
 
+# Fixed vision result used to keep the generate-path overflow tests hermetic
+# (PLAN.md item 86): without it those tests make real openrouter/free calls
+# whose non-deterministic outcome (sometimes a valid, non-alphabet JSON) would
+# break their content-routing assertions. The structure is the alphabet page
+# type so the full built-in content list (DEFAULT_CONTENTS) stays available,
+# preserving exactly what each test asserts.
+_DEFAULT_VISION_STRUCTURE = {
+    "content_pattern": "single_letter_word_illustration",
+    "element_count": 1,
+    "arrangement": "centered",
+    "text_image_relationship": "label_per_image",
+    "content_type_description": "a letter and word page",
+    "example_content_items": ["Apple"],
+}
+
 
 def test_cli_generate_pages_param(tmp_path: Path):
     """The --pages parameter controls how many pages are generated."""
@@ -70,7 +85,11 @@ def test_cli_pages_within_limit(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")
     img.save(img_path)
-    with patch("pageloom.cli.Pipeline") as mock_pipeline:
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
         mock_instance = MagicMock()
         mock_pipeline.return_value = mock_instance
         mock_instance.run.return_value = tmp_path / "output.pdf"
@@ -100,7 +119,11 @@ def test_cli_force_flag_passed_to_pipeline(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")
     img.save(img_path)
-    with patch("pageloom.cli.Pipeline") as mock_pipeline:
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
         mock_instance = MagicMock()
         mock_pipeline.return_value = mock_instance
         mock_instance.run.return_value = tmp_path / "output.pdf"

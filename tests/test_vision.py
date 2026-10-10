@@ -337,3 +337,105 @@ def test_vision_call_failure_wrapped_in_vision_analysis_error(tmp_path):
     finally:
         sys.modules.clear()
         sys.modules.update(original_modules)
+
+
+class _FakeVisionProvider:
+    """Stand-in for LLMProvider that replays scripted responses, so the
+    analyze-level retry loop can be tested in isolation from the real
+    provider's internal 429 backoff."""
+
+    provider_name = "openrouter"
+    model = "openrouter/free"
+    endpoint = "https://openrouter.ai/api/v1"
+    api_key = "test-key"
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def generate_vision_content(self, prompt, image_data_url, max_tokens, temperature=0.2):
+        self.calls.append({"prompt": prompt, "image_data_url": image_data_url})
+        resp = self._responses.pop(0)
+        if isinstance(resp, Exception):
+            raise resp
+        return resp
+
+
+def _analyzer_with_fake_provider(responses):
+    with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+        analyzer = PageVisionAnalyzer(provider="openrouter")
+    analyzer.provider = _FakeVisionProvider(responses)
+    return analyzer, analyzer.provider
+
+
+_VALID_RETRY_JSON = (
+    '{"content_pattern": "number_count_matching", '
+    '"content_type_description": "a page pairing a number with objects", '
+    '"element_count": 3, "arrangement": "row", '
+    '"text_image_relationship": "label_per_image", '
+    '"example_content_items": ["3 ducks"]}'
+)
+
+
+def test_analyze_retries_with_stricter_prompt_on_empty_content(tmp_path):
+    """An 'empty content' response (openrouter/free may route to a non-vision
+    model that returns nothing) triggers one retry with a stricter JSON-only
+    prompt; if the retry returns valid JSON, analyze succeeds."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    analyzer, fake = _analyzer_with_fake_provider(
+        [RuntimeError("Vision model returned empty content"), _VALID_RETRY_JSON]
+    )
+    result = analyzer.analyze(str(img_path))
+    assert result["content_pattern"] == "number_count_matching"
+    assert result["element_count"] == 3
+    assert result["example_content_items"] == ["3 ducks"]
+    assert len(fake.calls) == 2
+    assert "MUST reply with ONLY a single JSON object" in fake.calls[1]["prompt"]
+    assert "MUST reply with ONLY a single JSON object" not in fake.calls[0]["prompt"]
+
+
+def test_analyze_retries_on_non_json_then_succeeds(tmp_path):
+    """A non-JSON (prose) response triggers a retry that returns valid JSON."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    analyzer, fake = _analyzer_with_fake_provider(["Sorry, I can't help.", _VALID_RETRY_JSON])
+    result = analyzer.analyze(str(img_path))
+    assert result["content_pattern"] == "number_count_matching"
+    assert result["element_count"] == 3
+    assert len(fake.calls) == 2
+
+
+def test_analyze_exhausts_retry_on_persistent_empty_content(tmp_path):
+    """If both attempts return empty content, VisionAnalysisError is raised so the
+    caller can fall back to the heuristic classifier."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    analyzer, fake = _analyzer_with_fake_provider(
+        [
+            RuntimeError("Vision model returned empty content"),
+            RuntimeError("Vision model returned empty content"),
+        ]
+    )
+    with pytest.raises(VisionAnalysisError) as exc_info:
+        analyzer.analyze(str(img_path))
+    assert "empty content" in str(exc_info.value).lower()
+    assert len(fake.calls) == 2
+
+
+def test_analyze_does_not_retry_on_rate_limit_error(tmp_path):
+    """A rate-limit error is surfaced immediately -- a stricter prompt won't fix a
+    rate limit, so analyze must not burn an analysis-level retry on it."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    analyzer, fake = _analyzer_with_fake_provider(
+        [RuntimeError("429 rate limit: free-models-per-day-high-balance")]
+    )
+    with pytest.raises(VisionAnalysisError) as exc_info:
+        analyzer.analyze(str(img_path))
+    assert len(fake.calls) == 1
+    assert "rate limit" in str(exc_info.value).lower()

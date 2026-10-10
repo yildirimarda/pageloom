@@ -56,6 +56,21 @@ _REQUIRED_FIELDS = [
     "text_image_relationship",
 ]
 
+# OpenRouter's `openrouter/free` auto-router is non-deterministic: it may route
+# a vision request to a non-vision / safety / text-only free model that returns
+# empty content or prose instead of the requested JSON. When that happens we
+# retry once with a stricter "ONLY JSON, no other text" reminder; a different
+# free model is selected on the retry, which often returns valid JSON. Only
+# after both attempts do we give up and let callers fall back to the heuristic
+# classifier.
+_VISION_RETRY_SUFFIX = (
+    "\n\nRESPONSE_FORMAT: The previous response was empty or was not a valid JSON "
+    "object. You MUST reply with ONLY a single JSON object matching the schema "
+    "above -- no prose, no safety commentary, no markdown fences, no explanation, "
+    "no apology. Include the visible text/labels in example_content_items. Output "
+    "the JSON object alone and nothing else."
+)
+
 _ENV_VARS_BY_PROVIDER = {
     "openai": ["OPENAI_API_KEY", "PAGELOOM_LLM_API_KEY"],
     "anthropic": ["ANTHROPIC_API_KEY", "PAGELOOM_LLM_API_KEY"],
@@ -149,6 +164,15 @@ class PageVisionAnalyzer:
         _VISION_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         return _VISION_CACHE_DIR / (self._cache_key(source, description) + ".json")
 
+    def _build_prompt(self, description: str) -> str:
+        prompt = _ANALYSIS_PROMPT
+        if description:
+            prompt += (
+                f"\n\nThe page creator describes it as: {description!r}. Use this as a "
+                f"hint but trust what you actually see in the image."
+            )
+        return prompt
+
     def analyze(self, source: str | Path | Image.Image, description: str = "") -> dict:
         """Send the example page image to the vision model and return a structure dict.
 
@@ -177,30 +201,58 @@ class PageVisionAnalyzer:
                 f"Could not read example image for vision analysis: {exc}"
             ) from exc
 
-        prompt = _ANALYSIS_PROMPT
-        if description:
-            prompt += (
-                f"\n\nThe page creator describes it as: {description!r}. Use this as a "
-                f"hint but trust what you actually see in the image."
+        base_prompt = self._build_prompt(description)
+        # Try once with the base prompt, then retry once with a stricter
+        # "ONLY JSON" reminder. OpenRouter's free auto-router is
+        # non-deterministic and may route to a non-vision / safety model that
+        # returns empty content or prose; a different free model on the retry
+        # often yields valid JSON. Only after both attempts do we give up and
+        # let callers fall back to the heuristic classifier.
+        prompts = [base_prompt, base_prompt + _VISION_RETRY_SUFFIX]
+        last_exc: VisionAnalysisError | None = None
+        for prompt in prompts:
+            try:
+                raw = self.provider.generate_vision_content(
+                    prompt=prompt,
+                    image_data_url=image_data_url,
+                    max_tokens=400,
+                    temperature=0.2,
+                )
+                result = self._parse_response(raw)
+            except VisionAnalysisError as exc:
+                # Empty/non-JSON response or missing fields: retry once with
+                # the stricter prompt before giving up.
+                last_exc = exc
+                continue
+            except Exception as exc:
+                msg = str(exc).lower()
+                if "empty content" in msg:
+                    last_exc = VisionAnalysisError(
+                        f"Vision-based page analysis failed: {exc}"
+                    )
+                    continue
+                # Rate limit / timeout / auth / network errors are not fixed
+                # by a stricter prompt; surface them immediately for the
+                # caller's fallback handling.
+                raise VisionAnalysisError(
+                    f"Vision-based page analysis failed: {exc}"
+                ) from exc
+
+            try:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump(result, f)
+            except OSError:
+                # Cache write failure is non-fatal; the analysis result is
+                # still valid.
+                pass
+            return result
+
+        # All attempts failed with empty/non-JSON responses.
+        if last_exc is None:  # pragma: no cover - loop only exits here via continue
+            last_exc = VisionAnalysisError(
+                "Vision-based page analysis failed unexpectedly."
             )
-        try:
-            raw = self.provider.generate_vision_content(
-                prompt=prompt,
-                image_data_url=image_data_url,
-                max_tokens=400,
-                temperature=0.2,
-            )
-        except Exception as exc:
-            raise VisionAnalysisError(f"Vision-based page analysis failed: {exc}") from exc
-        result = self._parse_response(raw)
-        try:
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump(result, f)
-        except OSError:
-            # Cache write failure is non-fatal; the analysis result is
-            # still valid.
-            pass
-        return result
+        raise last_exc
 
     @staticmethod
     def _parse_response(raw: str) -> dict:
