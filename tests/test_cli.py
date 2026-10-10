@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from PIL import Image
 
 from pageloom.cli import DEFAULT_CONTENTS, main
+from pageloom.consistency import ConsistencyGuard
 from pageloom.vision import VisionAnalysisError
 
 
@@ -24,6 +25,7 @@ def test_cli_generate_pages_param(tmp_path: Path):
 
     with (
         patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
         patch("pageloom.cli.Pipeline") as mock_pipeline,
     ):
         mock_instance = MagicMock()
@@ -44,7 +46,10 @@ def test_cli_generate_pages_param(tmp_path: Path):
         assert result == 0
 
         mock_pipeline.assert_called_once_with(
-            example_image=str(img_path), description="", page_structure=detected_structure
+            example_image=str(img_path),
+            description="",
+            page_structure=detected_structure,
+            vision_analyzer=mock_vision_cls.return_value,
         )
         call_args = mock_instance.run.call_args
         assert call_args is not None
@@ -443,6 +448,7 @@ def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
             example_image=str(img_path),
             description="object name pair",
             page_structure=detected_structure,
+            vision_analyzer=None,
         )
 
 
@@ -498,7 +504,10 @@ def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
         contents = mock_instance.run.call_args.kwargs.get("contents")
         assert contents == ["4 balloons", "5 stars"]
         mock_pipeline.assert_called_once_with(
-            example_image=str(img_path), description="", page_structure=vision_structure
+            example_image=str(img_path),
+            description="",
+            page_structure=vision_structure,
+            vision_analyzer=mock_vision_cls.return_value,
         )
 
 
@@ -736,3 +745,72 @@ def test_cli_vision_provider_flag_passed_through(tmp_path: Path):
         )
         assert result == 0
         mock_vision_cls.assert_called_once_with(provider="anthropic")
+
+
+def test_cli_generate_runs_consistency_guard_with_vision_analyzer(tmp_path: Path, capsys):
+    """`pageloom generate` must actually run ConsistencyGuard on every generated
+    page (previously the class was only ever constructed inside tests), and the
+    guard must receive the same vision_analyzer the CLI used to classify the
+    example so generated pages are re-classified with the same method."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="purple").save(img_path)
+
+    vision_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "content_type_description": "a letter and word page",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+        "example_content_items": ["Apple"],
+    }
+
+    captured: dict = {}
+    verify_calls: list = []
+
+    def make_guard(*args, **kwargs):
+        guard = ConsistencyGuard(*args, **kwargs)
+        captured["guard"] = guard
+        captured["kwargs"] = kwargs
+        original_verify = guard.verify
+
+        def spy_verify(generated_image):
+            verify_calls.append(generated_image)
+            return original_verify(generated_image)
+
+        guard.verify = spy_verify  # type: ignore[method-assign]
+        return guard
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.pipeline.IllustrationGenerator") as mock_gen_cls,
+        patch("pageloom.pipeline.ConsistencyGuard", side_effect=make_guard),
+    ):
+        mock_vision_cls.return_value.analyze.return_value = vision_structure
+        mock_gen_cls.return_value.generate.side_effect = lambda prompt, width, height: Image.new(
+            "RGB", (width, height), color="white"
+        )
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        assert result == 0
+
+    # The guard was constructed with the CLI's vision analyzer: generated pages
+    # are re-classified with the same method used for the example.
+    assert captured["kwargs"]["vision_analyzer"] is mock_vision_cls.return_value
+    assert captured["guard"].vision_analyzer is mock_vision_cls.return_value
+    # verify() ran once per generated page during `pageloom generate`.
+    assert len(verify_calls) == 2
+    # And the run reported the check to the user.
+    out = capsys.readouterr()
+    assert "Consistency check: " in out.out
+    assert " page(s) match the example." in out.out
+    assert (tmp_path / "out.pdf").exists()

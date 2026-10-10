@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import sys
 from pathlib import Path
 
 from PIL import Image
 
 from pageloom import settings
+from pageloom.consistency import ConsistencyGuard
 from pageloom.generator import IllustrationGenerator
 from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
@@ -60,6 +62,20 @@ class Pipeline:
         self.page_structure = page_structure or detect_structure(
             source=example_image, description=description, vision_analyzer=vision_analyzer
         )
+        # Consistency verification runs on every generated page. The guard is
+        # built from the style/structure already extracted above (no duplicate
+        # analysis of the example) and receives the same `vision_analyzer` used
+        # for the example so generated pages are re-classified with the same
+        # method (vision or heuristic) for a like-for-like structural check.
+        self.vision_analyzer = vision_analyzer
+        self.consistency_guard = ConsistencyGuard(
+            example_style=self.style,
+            page_structure=self.page_structure,
+            description=description,
+            vision_analyzer=vision_analyzer,
+        )
+        # One result dict per page from the most recent run() (see _verify_page).
+        self.consistency_results: list[dict] = []
 
     def run(
         self,
@@ -245,4 +261,40 @@ class Pipeline:
                 arrangement=structure.get("arrangement"),
             )
             pages.append(overlaid)
+
+        # Verify every finished page against the example before compiling.
+        self.consistency_results = [self._verify_page(page) for page in pages]
+        self._report_consistency()
         return self.compiler.compile(pages, output_path_obj)
+
+    def _verify_page(self, page: Image.Image) -> dict:
+        """Run the consistency guard against one generated page.
+
+        A guard failure (an unexpected extractor/classifier error) is recorded
+        as an inconsistency instead of aborting generation: verification is a
+        quality signal, never a hard requirement for producing the PDF.
+        """
+        try:
+            return self.consistency_guard.verify(page)
+        except Exception as exc:  # noqa: BLE001 - any check failure must not abort generation
+            issue = f"Consistency check failed: {exc}"
+            return {
+                "consistent": False,
+                "issues": [issue],
+                "details": {"consistent": False, "issues": [issue]},
+            }
+
+    def _report_consistency(self) -> None:
+        """Report consistency results: a one-line summary on stdout, plus a
+        stderr warning for each issue on each inconsistent page."""
+        results = self.consistency_results
+        if not results:
+            return
+        matched = sum(1 for result in results if result.get("consistent"))
+        total = len(results)
+        print(f"Consistency check: {matched}/{total} page(s) match the example.")
+        for index, result in enumerate(results, start=1):
+            if result.get("consistent"):
+                continue
+            for issue in result.get("issues", []):
+                print(f"Warning: page {index} is not consistent: {issue}", file=sys.stderr)
