@@ -12,11 +12,25 @@ any keyed environment while still exercising the real prompt/schema combination
 end-to-end (no mocks) on every run.
 """
 
+import importlib.util
 import os
 import subprocess
 import sys
 
 import pytest
+
+
+def _load_smoke_vision_module():
+    """Load smoke_vision.py as a module so _classify_failure can be unit-tested
+    without requiring a live API key (the live subprocess test above is skipped
+    in keyless CI)."""
+    spec = importlib.util.spec_from_file_location(
+        "smoke_vision",
+        os.path.join(os.path.dirname(__file__), "..", "smoke_vision.py"),
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def test_smoke_vision_handles_real_free_tier_response():
@@ -64,3 +78,81 @@ def test_smoke_vision_handles_real_free_tier_response():
         "smoke_vision.py did not report a schema-valid response nor a known "
         f"graceful free-tier outcome:\n{combined}"
     )
+
+
+@pytest.mark.parametrize(
+    ("error_message", "should_be_graceful"),
+    [
+        # --- The core fix: openrouter/free returns HTTP 200 with null content ---
+        # (content=null) instead of a 429. The provider raises:
+        #   RuntimeError("Vision model returned empty content")
+        # which vision.py wraps as:
+        #   VisionAnalysisError("Vision-based page analysis failed: Vision model returned empty content")
+        (
+            "Vision-based page analysis failed: Vision model returned empty content",
+            True,
+        ),
+        ("Vision model returned empty content", True),
+        # The provider may also wrap it with _classify_provider_error:
+        (
+            (
+                "Vision-based page analysis failed: LLM provider 'openrouter' "
+                "API call failed: Vision model returned empty content"
+            ),
+            True,
+        ),
+        # --- Rate limit (the old 429 behaviour) ---
+        (
+            "Vision-based page analysis failed: LLM provider 'openrouter' rate limit exceeded.",
+            True,
+        ),
+        ("HTTP 429 Too Many Requests", True),
+        ("free-models-per-day-high-balance", True),
+        # --- Non-JSON / partial output from a non-vision free model ---
+        (
+            "Vision model returned non-JSON output that could not be parsed: 'prose'",
+            True,
+        ),
+        (
+            "Vision model response is missing required field(s): content_pattern",
+            True,
+        ),
+        # --- new reality: openrouter/free returns HTTP 200 with choices=None ---
+        # The SDK raises TypeError/IndexError/AttributeError when trying to
+        # subscript None (response.choices[0]) -- NOT "Vision model returned
+        # empty content". _classify_failure must still treat this as graceful.
+        (
+            "Vision-based page analysis failed: 'NoneType' object is not subscriptable",
+            True,
+        ),
+        (
+            "Vision-based page analysis failed: list index out of range",
+            True,
+        ),
+        (
+            "Vision-based page analysis failed: 'NoneType' object has no attribute 'message'",
+            True,
+        ),
+        # --- Genuinely unexpected failures must still be surfaced (exit 1) ---
+        ("Some bizarre error no one anticipated", False),
+        ("Connection refused", False),
+    ],
+)
+def test_classify_failure_error_classification(error_message, should_be_graceful):
+    """Lock in _classify_failure's behaviour in CI (keyless) environments.
+
+    The live subprocess smoke test above is skipped without a key, so this
+    unit test is the only coverage in CI for the error-classification logic
+    that makes `smoke_vision.py` exit 0 on the free tier's empty/null
+    content outcome instead of exiting 1 with "Unexpected failure".
+    """
+    mod = _load_smoke_vision_module()
+    reason = mod._classify_failure(error_message)
+    if should_be_graceful:
+        assert reason != "unexpected error", (
+            f"{error_message!r} should be a known graceful free-tier outcome, got: {reason}"
+        )
+    else:
+        assert reason == "unexpected error", (
+            f"{error_message!r} should be unexpected, got: {reason}"
+        )
