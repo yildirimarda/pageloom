@@ -150,7 +150,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   `from_pretrained` that sets `safety_checker` to a sentinel leaves it `None` after
   `super().__init__`, before any subclass line runs).
 
-- [ ] Load the Stable Diffusion pipeline with `safety_checker=None` (and
+- [x] Load the Stable Diffusion pipeline with `safety_checker=None` (and
   `feature_extractor=None`) at `from_pretrained` time instead of setting
   `pipeline.safety_checker = None` after load: with diffusers >= 0.40 the late
   assignment leaves a live checker module sitting in VRAM/RAM for the whole
