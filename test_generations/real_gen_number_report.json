@@ -1,0 +1,91 @@
+{
+  "kind": "number",
+  "human_page_type": "number/counting page",
+  "example_image": "/work/examples_real/real_number_page.png",
+  "vision": {
+    "source": "vision",
+    "fallback_warning_on_stderr": false,
+    "stderr_snippet": "",
+    "note": "ok",
+    "elapsed_seconds": 15.6
+  },
+  "detected_structure": {
+    "content_pattern": "number_count_matching",
+    "content_type_description": "A page that pairs a numeral with its corresponding count and an illustration of that many items.",
+    "element_count": 1,
+    "arrangement": "centered",
+    "text_image_relationship": "label_per_image",
+    "example_content_items": [
+      "3",
+      "3 ducks"
+    ]
+  },
+  "example_content_items_from_vision": [
+    "3",
+    "3 ducks"
+  ],
+  "contents_used": [
+    "1 duck",
+    "2 ducks",
+    "4 fish"
+  ],
+  "sd": {
+    "real_stable_diffusion": true,
+    "model_id": "runwayml/stable-diffusion-v1-5",
+    "inference_steps": 6,
+    "elapsed_seconds": 214.6,
+    "generator_calls": 3,
+    "call_log": [
+      {
+        "index": 1,
+        "seconds": 71.6
+      },
+      {
+        "index": 2,
+        "seconds": 71.1
+      },
+      {
+        "index": 3,
+        "seconds": 71.7
+      }
+    ],
+    "safety_checker_disabled_in_prod": true
+  },
+  "output_pdf": "/work/test_generations/real_gen_number.pdf",
+  "page_count": 3,
+  "page_verification": [
+    {
+      "page_index": 0,
+      "dark_frac": 0.063,
+      "colored_frac_upper": 0.783,
+      "label_dark_pixels": 14879,
+      "label_frac": 0.132,
+      "has_picture": true,
+      "has_label": true,
+      "not_blacked_out": true
+    },
+    {
+      "page_index": 1,
+      "dark_frac": 0.097,
+      "colored_frac_upper": 0.766,
+      "label_dark_pixels": 20755,
+      "label_frac": 0.184,
+      "has_picture": true,
+      "has_label": true,
+      "not_blacked_out": true
+    },
+    {
+      "page_index": 2,
+      "dark_frac": 0.102,
+      "colored_frac_upper": 0.816,
+      "label_dark_pixels": 24167,
+      "label_frac": 0.215,
+      "has_picture": true,
+      "has_label": true,
+      "not_blacked_out": true
+    }
+  ],
+  "all_pages_blacked_out": false,
+  "all_pages_have_picture": true,
+  "all_pages_have_label": true
+}

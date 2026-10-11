@@ -1,0 +1,273 @@
+{
+  "alphabet": {
+    "kind": "alphabet",
+    "human_page_type": "alphabet letter+word page",
+    "example_image": "/work/examples_real/real_alphabet_page.png",
+    "vision": {
+      "source": "heuristic_fallback",
+      "fallback_warning_on_stderr": true,
+      "stderr_snippet": "Warning: vision-based page analysis failed, falling back to heuristic classification: Vision-based page analysis failed: Vision model returned empty content The selected model/provider does not appear to support image input. Set OPENROUTER_VISION_MODEL to a vision-capable model, or unset it to use the free auto-router (openrouter/free), which selects one automatically -- see README for how to find",
+      "note": "vision empty/prose (retried)",
+      "elapsed_seconds": 47.1
+    },
+    "detected_structure": {
+      "content_pattern": "single_letter_word_illustration",
+      "element_count": 1,
+      "arrangement": "centered",
+      "text_image_relationship": "label_per_image",
+      "image_size": [
+        612,
+        612
+      ]
+    },
+    "example_content_items_from_vision": null,
+    "contents_used": [
+      "A Apple",
+      "C Cherry",
+      "D Dragonfruit"
+    ],
+    "sd": {
+      "real_stable_diffusion": true,
+      "model_id": "runwayml/stable-diffusion-v1-5",
+      "inference_steps": 6,
+      "elapsed_seconds": 220.1,
+      "generator_calls": 3,
+      "call_log": [
+        {
+          "index": 1,
+          "seconds": 74.0
+        },
+        {
+          "index": 2,
+          "seconds": 72.7
+        },
+        {
+          "index": 3,
+          "seconds": 73.1
+        }
+      ],
+      "safety_checker_disabled_in_prod": true
+    },
+    "output_pdf": "/work/test_generations/real_gen_alphabet.pdf",
+    "page_count": 3,
+    "page_verification": [
+      {
+        "page_index": 0,
+        "dark_frac": 0.108,
+        "colored_frac_upper": 0.753,
+        "label_dark_pixels": 22305,
+        "label_frac": 0.198,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      },
+      {
+        "page_index": 1,
+        "dark_frac": 0.114,
+        "colored_frac_upper": 0.809,
+        "label_dark_pixels": 27723,
+        "label_frac": 0.246,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      },
+      {
+        "page_index": 2,
+        "dark_frac": 0.188,
+        "colored_frac_upper": 0.615,
+        "label_dark_pixels": 27662,
+        "label_frac": 0.246,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      }
+    ],
+    "all_pages_blacked_out": false,
+    "all_pages_have_picture": true,
+    "all_pages_have_label": true
+  },
+  "number": {
+    "kind": "number",
+    "human_page_type": "number/counting page",
+    "example_image": "/work/examples_real/real_number_page.png",
+    "vision": {
+      "source": "vision",
+      "fallback_warning_on_stderr": false,
+      "stderr_snippet": "",
+      "note": "ok",
+      "elapsed_seconds": 15.6
+    },
+    "detected_structure": {
+      "content_pattern": "number_count_matching",
+      "content_type_description": "A page that pairs a numeral with its corresponding count and an illustration of that many items.",
+      "element_count": 1,
+      "arrangement": "centered",
+      "text_image_relationship": "label_per_image",
+      "example_content_items": [
+        "3",
+        "3 ducks"
+      ]
+    },
+    "example_content_items_from_vision": [
+      "3",
+      "3 ducks"
+    ],
+    "contents_used": [
+      "1 duck",
+      "2 ducks",
+      "4 fish"
+    ],
+    "sd": {
+      "real_stable_diffusion": true,
+      "model_id": "runwayml/stable-diffusion-v1-5",
+      "inference_steps": 6,
+      "elapsed_seconds": 214.6,
+      "generator_calls": 3,
+      "call_log": [
+        {
+          "index": 1,
+          "seconds": 71.6
+        },
+        {
+          "index": 2,
+          "seconds": 71.1
+        },
+        {
+          "index": 3,
+          "seconds": 71.7
+        }
+      ],
+      "safety_checker_disabled_in_prod": true
+    },
+    "output_pdf": "/work/test_generations/real_gen_number.pdf",
+    "page_count": 3,
+    "page_verification": [
+      {
+        "page_index": 0,
+        "dark_frac": 0.063,
+        "colored_frac_upper": 0.783,
+        "label_dark_pixels": 14879,
+        "label_frac": 0.132,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      },
+      {
+        "page_index": 1,
+        "dark_frac": 0.097,
+        "colored_frac_upper": 0.766,
+        "label_dark_pixels": 20755,
+        "label_frac": 0.184,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      },
+      {
+        "page_index": 2,
+        "dark_frac": 0.102,
+        "colored_frac_upper": 0.816,
+        "label_dark_pixels": 24167,
+        "label_frac": 0.215,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      }
+    ],
+    "all_pages_blacked_out": false,
+    "all_pages_have_picture": true,
+    "all_pages_have_label": true
+  },
+  "matching": {
+    "kind": "matching",
+    "human_page_type": "word-image matching page (2-3 picture+word pairs)",
+    "example_image": "/work/examples_real/real_matching_page.png",
+    "vision": {
+      "source": "vision",
+      "fallback_warning_on_stderr": false,
+      "stderr_snippet": "",
+      "note": "ok",
+      "elapsed_seconds": 30.3
+    },
+    "detected_structure": {
+      "content_pattern": "word_image_matching",
+      "content_type_description": "A page where each illustration is paired with a word label that must be matched.",
+      "element_count": 3,
+      "arrangement": "row",
+      "text_image_relationship": "label_per_image",
+      "example_content_items": [
+        "Caat",
+        "Dog",
+        "Fish"
+      ]
+    },
+    "example_content_items_from_vision": [
+      "Caat",
+      "Dog",
+      "Fish"
+    ],
+    "contents_used": [
+      "Cat",
+      "Dog",
+      "Fish"
+    ],
+    "sd": {
+      "real_stable_diffusion": true,
+      "model_id": "runwayml/stable-diffusion-v1-5",
+      "inference_steps": 6,
+      "elapsed_seconds": 214.2,
+      "generator_calls": 3,
+      "call_log": [
+        {
+          "index": 1,
+          "seconds": 70.7
+        },
+        {
+          "index": 2,
+          "seconds": 71.9
+        },
+        {
+          "index": 3,
+          "seconds": 71.4
+        }
+      ],
+      "safety_checker_disabled_in_prod": true
+    },
+    "output_pdf": "/work/test_generations/real_gen_matching.pdf",
+    "page_count": 3,
+    "page_verification": [
+      {
+        "page_index": 0,
+        "dark_frac": 0.083,
+        "colored_frac_upper": 0.812,
+        "label_dark_pixels": 17972,
+        "label_frac": 0.16,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      },
+      {
+        "page_index": 1,
+        "dark_frac": 0.089,
+        "colored_frac_upper": 0.784,
+        "label_dark_pixels": 27570,
+        "label_frac": 0.245,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      },
+      {
+        "page_index": 2,
+        "dark_frac": 0.104,
+        "colored_frac_upper": 0.77,
+        "label_dark_pixels": 24032,
+        "label_frac": 0.213,
+        "has_picture": true,
+        "has_label": true,
+        "not_blacked_out": true
+      }
+    ],
+    "all_pages_blacked_out": false,
+    "all_pages_have_picture": true,
+    "all_pages_have_label": true
+  }
+}
