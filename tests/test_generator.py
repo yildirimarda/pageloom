@@ -238,6 +238,32 @@ def test_production_generator_disables_safety_checker(mock_mps, mock_cuda, mock_
     assert gen.pipeline.safety_checker is None
 
 
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_from_pretrained_called_with_safety_checker_none(mock_mps, mock_cuda, mock_from_pretrained):
+    """The checker must be disabled at load time, not only after load.
+
+    With diffusers >= 0.40 a late ``pipeline.safety_checker = None`` leaves the
+    unused checker module resident in VRAM/RAM for the whole run; passing
+    ``safety_checker=None`` (and ``feature_extractor=None``) to from_pretrained
+    never loads it. Locks in the PLAN.md item: assert the load-time kwargs.
+    """
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_pipeline.feature_extractor = object()  # simulate a loader that still set it
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    IllustrationGenerator(verify_license=False)
+    kwargs = mock_from_pretrained.call_args.kwargs
+    assert kwargs.get("safety_checker") is None
+    assert kwargs.get("feature_extractor") is None
+    # belt-and-braces fallback for overridden loaders still applies
+    assert mock_pipeline.safety_checker is None
+    assert mock_pipeline.feature_extractor is None
+
+
 def _make_generator_with_pipeline_side_effect(side_effect):
     """Build a generator whose mocked pipeline applies `side_effect` on call."""
     from pageloom.generator import IllustrationGenerator
