@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from PIL import Image
 
 from pageloom.consistency import ConsistencyGuard
@@ -25,6 +26,30 @@ def test_round_to_multiple_rejects_non_positive_base():
     except ValueError:
         return
     raise AssertionError("expected ValueError for base=0")
+
+
+def test_round_to_multiple_feeds_real_diffusers_check_inputs():
+    """The helper's output must satisfy the *actual* diffusers VAE guard, not
+    just our own % 8 assertion -- if diffusers ever tightens the rule, this
+    catches it (Milestone 8 regression)."""
+    from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
+        StableDiffusionPipeline,
+    )
+
+    # Exact crash inputs from the bug report: 618x800.
+    w, h = round_to_multiple(618), round_to_multiple(800)
+    assert (w, h) == (624, 800)
+    StableDiffusionPipeline.check_inputs(None, "prompt", h, w, 1)
+
+    # The un-rounded inputs must be what diffusers actually rejects, so the
+    # helper is load-bearing rather than decorative.
+    with pytest.raises(ValueError, match="divisible by 8"):
+        StableDiffusionPipeline.check_inputs(None, "prompt", 800, 618, 1)
+
+    for dim in (618, 612, 151, 266, 1):
+        StableDiffusionPipeline.check_inputs(
+            None, "prompt", round_to_multiple(dim), round_to_multiple(dim), 1
+        )
 
 
 def test_pipeline_detects_page_structure_from_example(tmp_path: Path):
@@ -172,11 +197,37 @@ def test_pipeline_run_force_regenerates(mock_compile, tmp_path: Path):
     assert mock_gen.generate.call_count == 2
 
 
+def make_sd_checked_image(color: str = "red"):
+    """Mock-generator side effect that runs diffusers' *real* dimension check.
+
+    A plain MagicMock ignores whatever width/height it is called with, which is
+    exactly how the Milestone 8 618x800 crash stayed invisible to every test.
+    Running ``check_inputs`` here fails the test (with diffusers' own message)
+    if the pipeline ever stops rounding, without loading the model.
+    """
+
+    from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
+        StableDiffusionPipeline,
+    )
+
+    def _generate(prompt: str, **kwargs) -> Image.Image:
+        w = int(kwargs.get("width", 512))
+        h = int(kwargs.get("height", 512))
+        StableDiffusionPipeline.check_inputs(None, prompt, h, w, 1)
+        return Image.new("RGB", (w, h), color=color)
+
+    return _generate
+
+
 @patch("pageloom.pipeline.PDFCompiler.compile")
 def test_pipeline_generate_dims_divisible_by_8_for_odd_source_size(mock_compile, tmp_path: Path):
     """A 618x800 example (618 not divisible by 8) must never reach the
     generator with non-multiple-of-8 dimensions, or real Stable Diffusion's VAE
-    check_inputs() would raise ValueError (Milestone 8 regression)."""
+    check_inputs() would raise ValueError (Milestone 8 regression).
+
+    The mock generator runs diffusers' actual check_inputs, so this fails if
+    the rounding is removed -- unlike a MagicMock, it cannot swallow the bug.
+    """
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (618, 800), color="green")
     img.save(img_path)
@@ -184,9 +235,14 @@ def test_pipeline_generate_dims_divisible_by_8_for_odd_source_size(mock_compile,
     called_with: list[tuple[int, int]] = []
 
     def make_image(prompt: str, **kwargs) -> Image.Image:
-        w = kwargs.get("width", 512)
-        h = kwargs.get("height", 512)
-        called_with.append((int(w), int(h)))
+        w = int(kwargs.get("width", 512))
+        h = int(kwargs.get("height", 512))
+        called_with.append((w, h))
+        from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
+            StableDiffusionPipeline,
+        )
+
+        StableDiffusionPipeline.check_inputs(None, prompt, h, w, 1)
         return Image.new("RGB", (w, h), color="red")
 
     mock_gen = MagicMock()
@@ -201,6 +257,10 @@ def test_pipeline_generate_dims_divisible_by_8_for_odd_source_size(mock_compile,
 
     assert mock_gen.generate.call_count == 2
     assert called_with, "generator should have been called"
+    # 618 -> 624 (round up), 800 stays as-is; both must pass the real VAE check.
+    assert called_with == [(624, 800), (624, 800)], (
+        f"expected rounded 624x800 page size, got {called_with}"
+    )
     for w, h in called_with:
         assert w % 8 == 0 and h % 8 == 0, f"generator called with non-multiple-of-8 size {w}x{h}"
 
@@ -214,16 +274,8 @@ def test_pipeline_multiple_labels_sub_images_dims_divisible_by_8(mock_compile, t
     img = Image.new("RGB", (618, 800), color="yellow")
     img.save(img_path)
 
-    called_with: list[tuple[int, int]] = []
-
-    def make_sub_image(prompt: str, **kwargs) -> Image.Image:
-        w = kwargs.get("width", 512)
-        h = kwargs.get("height", 512)
-        called_with.append((int(w), int(h)))
-        return Image.new("RGB", (w, h), color="blue")
-
     mock_gen = MagicMock()
-    mock_gen.generate.side_effect = make_sub_image
+    mock_gen.generate.side_effect = make_sd_checked_image("blue")
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(
@@ -241,10 +293,7 @@ def test_pipeline_multiple_labels_sub_images_dims_divisible_by_8(mock_compile, t
         output_path=str(tmp_path / "output.pdf"),
     )
 
-    assert mock_gen.generate.call_count == 3
-    assert called_with, "generator should have been called"
-    for w, h in called_with:
-        assert w % 8 == 0 and h % 8 == 0, f"generator called with non-multiple-of-8 size {w}x{h}"
+    assert mock_gen.generate.call_count == 3  # one generate per element
 
 
 @patch("pageloom.pipeline.PDFCompiler.compile")
