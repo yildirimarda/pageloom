@@ -134,3 +134,16 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   at the rounded size — today the only defense lives in `Pipeline.run()`, and
   `tests/test_generator.py` only ever exercises sizes the mock pipeline accepts, so this
   exact crash path is untested at the generator layer.
+
+- [ ] Load the Stable Diffusion pipeline with `safety_checker=None` (and
+  `feature_extractor=None`) at `from_pretrained` time instead of setting
+  `pipeline.safety_checker = None` after load: with diffusers >= 0.40 the late
+  assignment leaves a live checker module sitting in VRAM/RAM for the whole
+  run (~hundreds of MB that PageLoom never uses, since it only ever draws
+  family-friendly content) and the checker's CLIP weights are still resident
+  even though `run_safety_checker()` short-circuits when the attribute is
+  `None`. The behavioral fix (black frames never returned) is already covered
+  by `tests/test_generator.py::test_production_generator_disables_safety_checker`
+  and the new generate()-level black-frame retry; this follow-up only removes
+  the dead weight. Cover with a test that asserts `from_pretrained` was called
+  with `safety_checker=None`.

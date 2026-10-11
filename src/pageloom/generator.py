@@ -2,12 +2,42 @@
 
 from __future__ import annotations
 
+import sys
+
 import torch
 from diffusers import StableDiffusionPipeline
 from PIL import Image
 
 from pageloom import settings
 from pageloom.license_check import LicenseVerifier
+
+# Abort the safety-checker retry loop after this many consecutive
+# NSFW-flagged (black) results. Set PAGELOOM_SAFETY_MAX_RETRIES=0 to disable
+# retries entirely (still tolerant: the black image is returned as-is, as
+# before), or a higher value to retry more aggressively.
+DEFAULT_SAFETY_MAX_RETRIES = 3
+
+
+def _safety_max_retries() -> int:
+    raw = __import__("os").environ.get("PAGELOOM_SAFETY_MAX_RETRIES")
+    if raw is None or raw.strip() == "":
+        return DEFAULT_SAFETY_MAX_RETRIES
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return DEFAULT_SAFETY_MAX_RETRIES
+
+
+def _is_black_image(image: Image.Image, threshold: int = 8) -> bool:
+    """True when every pixel is near-black (the NSFW safety checker's blackout).
+
+    SD1.5's bundled ``StableDiffusionSafetyChecker`` replaces a flagged image
+    with ``np.zeros(...)`` (fully black). A genuinely dark illustration can
+    contain a few non-zero pixels, so require every channel to be within
+    ``threshold`` of 0 before calling it a blackout.
+    """
+    extrema = image.convert("RGB").getextrema()
+    return all(channel_max <= threshold for _lo, channel_max in extrema)
 
 
 class IllustrationGenerator:
@@ -66,6 +96,11 @@ class IllustrationGenerator:
         # already used by scripts/generate_real_multiple_labels.py; making it the
         # production default is the recorded Discovered gap (see PLAN.md).
         self.pipeline.safety_checker = None
+        # Belt and braces: disabling the checker above is the primary fix, but
+        # generate() also black-frame-detects and retries (with a fresh seed)
+        # in case a caller re-enables the checker or a future model ships a
+        # different blackout path -- a black frame is never a valid result.
+        self.safety_max_retries = _safety_max_retries()
 
     def generate(
         self,
@@ -77,22 +112,50 @@ class IllustrationGenerator:
         guidance_scale: float = 7.5,
         seed: int | None = None,
     ) -> Image.Image:
-        generator = None
-        if seed is not None:
-            generator = torch.Generator(device=self.device).manual_seed(seed)
-        result = self.pipeline(
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            width=width,
-            height=height,
-            num_inference_steps=num_inference_steps,
-            guidance_scale=guidance_scale,
-            generator=generator,
-        )
-        images = getattr(result, "images", None) or []
-        if not images:
-            return Image.new("RGB", (width, height), color="gray")
-        image = images[0]
-        if not isinstance(image, Image.Image):
-            return Image.new("RGB", (width, height), color="gray")
-        return image
+        max_retries = getattr(self, "safety_max_retries", _safety_max_retries())
+        attempt = 0
+        while True:
+            # Vary the latent seed per attempt so a safety-checker blackout
+            # (which is seed-dependent) gets a fresh draw rather than
+            # reproducing the same black image forever.
+            attempt_seed = None if seed is None else seed + attempt
+            generator = None
+            if attempt_seed is not None:
+                generator = torch.Generator(device=self.device).manual_seed(attempt_seed)
+            result = self.pipeline(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                width=width,
+                height=height,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+            )
+            images = getattr(result, "images", None) or []
+            if not images:
+                return Image.new("RGB", (width, height), color="gray")
+            image = images[0]
+            if not isinstance(image, Image.Image):
+                return Image.new("RGB", (width, height), color="gray")
+            # Tolerate SD1.5's false-positive NSFW blackout: retry with a new
+            # seed instead of silently returning the black frame. If the
+            # configured pipeline still flags us after ``max_retries``, return
+            # the black image rather than looping forever (same end state as
+            # before this retry existed, just with a clear stderr warning).
+            if _is_black_image(image) and attempt < max_retries:
+                attempt += 1
+                print(
+                    "Warning: SD1.5 safety checker blacked out an illustration "
+                    f"(NSFW false positive on a benign prompt); retrying "
+                    f"({attempt}/{max_retries}) with a different seed.",
+                    file=sys.stderr,
+                )
+                continue
+            if _is_black_image(image):
+                print(
+                    "Warning: SD1.5 safety checker blacked out an illustration "
+                    f"after {attempt + 1} attempt(s); returning the black image. "
+                    "Set PAGELOOM_SAFETY_MAX_RETRIES to raise the retry cap.",
+                    file=sys.stderr,
+                )
+            return image
