@@ -116,7 +116,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
      confirmation itself is superseded: as of 2026-10 the free router returns HTTP 200 with
       empty content instead of a 429, captured by the open smoke-test items in Milestone 6. -->
 
-- [ ] Make the real generation smoke path tolerate (or auto-retry past) the SD1.5
+- [x] Make the real generation smoke path tolerate (or auto-retry past) the SD1.5
   default NSFW safety checker, which false-positives on benign children's-book
   subjects (e.g. the words "banana"/"cherry") and returns fully-black images --
   the generator treats the black image as a valid result and never retries, so a
