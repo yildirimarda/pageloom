@@ -124,7 +124,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   verification script works around this by disabling `safety_checker`, but the
   production `IllustrationGenerator` does not.
 
-- [ ] Give `IllustrationGenerator.generate()` its own dimension self-defense: when the
+- [x] Give `IllustrationGenerator.generate()` its own dimension self-defense: when the
   diffusers pipeline raises `ValueError: height and width have to be divisible by 8`
   (i.e. a caller bypassed `Pipeline.run()`'s `round_to_multiple`, e.g. a library user
   passing odd sizes directly), round the width/height up to the nearest multiple of 8

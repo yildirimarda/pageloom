@@ -236,3 +236,109 @@ def test_production_generator_disables_safety_checker(mock_mps, mock_cuda, mock_
 
     gen = IllustrationGenerator(verify_license=False)
     assert gen.pipeline.safety_checker is None
+
+
+def _make_generator_with_pipeline_side_effect(side_effect):
+    """Build a generator whose mocked pipeline applies `side_effect` on call."""
+    from pageloom.generator import IllustrationGenerator
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_pipeline.side_effect = side_effect
+    with (
+        patch("pageloom.generator.torch.cuda.is_available", return_value=False),
+        patch("pageloom.generator.torch.backends.mps.is_available", return_value=False),
+        patch("pageloom.generator.StableDiffusionPipeline.from_pretrained") as mock_fp,
+    ):
+        mock_fp.return_value = mock_pipeline
+        gen = IllustrationGenerator(verify_license=False)
+    return gen, mock_pipeline
+
+
+def test_round_to_multiple_8_rounds_up():
+    from pageloom.generator import IllustrationGenerator
+
+    assert IllustrationGenerator._round_to_multiple_8(618) == 624
+    assert IllustrationGenerator._round_to_multiple_8(800) == 800
+    assert IllustrationGenerator._round_to_multiple_8(612) == 616
+    assert IllustrationGenerator._round_to_multiple_8(624) == 624
+    assert IllustrationGenerator._round_to_multiple_8(1) == 8
+    assert IllustrationGenerator._round_to_multiple_8(0) == 0
+
+
+def test_generate_rounds_odd_dimensions_before_pipeline():
+    """generate() must round odd library-caller dimensions before hitting the pipeline.
+
+    Regression for the PLAN.md Discovered item: only Pipeline.run() rounded, so a
+    library user calling generate(width=618) directly would hit diffusers'
+    check_inputs() ValueError. generate() now rounds (and catches ValueError as
+    a backup), so a successful pipeline call must see multiples of 8.
+    """
+    from PIL import Image
+
+    called_with = []
+
+    def side_effect(**kwargs):
+        called_with.append((kwargs.get("width"), kwargs.get("height")))
+        # Real diffusers check_inputs, so an unrounded size fails the test.
+        from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
+            StableDiffusionPipeline,
+        )
+
+        StableDiffusionPipeline.check_inputs(
+            None, kwargs.get("prompt"), kwargs.get("height"), kwargs.get("width"), 1
+        )
+        return MagicMock(
+            images=[Image.new("RGB", (kwargs.get("width"), kwargs.get("height")), color="green")]
+        )
+
+    gen, _ = _make_generator_with_pipeline_side_effect(side_effect)
+    result = gen.generate("a happy cat", width=618, height=800)
+    assert called_with == [(624, 800)]
+    assert result.size == (624, 800)
+
+
+def test_generate_catches_divisible_by_8_value_error_and_retries_once():
+    """When the pipeline raises the divisible-by-8 ValueError despite valid input, retry once.
+
+    Covers the PLAN.md Discovered item's "round and retry" wording: generate()
+    catches the ValueError, rounds again, and returns a successful image at the
+    rounded size instead of propagating the raw exception.
+    """
+    from PIL import Image
+
+    calls = []
+
+    def side_effect(**kwargs):
+        calls.append((kwargs.get("width"), kwargs.get("height")))
+        if len(calls) == 1:
+            # Simulate a pipeline that rejects even (valid) sizes once, e.g. a
+            # stricter or misconfigured check. generate() must catch this,
+            # round again, and retry.
+            raise ValueError("`height` and `width` have to be divisible by 8 but are 800 and 618.")
+        return MagicMock(
+            images=[Image.new("RGB", (kwargs.get("width"), kwargs.get("height")), color="blue")]
+        )
+
+    gen, _ = _make_generator_with_pipeline_side_effect(side_effect)
+    # start with an already-multiple-of-8 size so only the retry path rounds
+    result = gen.generate("a happy cat", width=624, height=800)
+    assert len(calls) == 2
+    assert calls[1] == (632, 808)  # bumped to next multiple of 8
+    assert result.size == (632, 808)
+    assert result.getpixel((0, 0)) == (0, 0, 255)
+
+
+def test_generate_propagates_unrelated_value_error():
+    """An unrelated ValueError (e.g. prompt/embeds) must not be swallowed."""
+
+    def side_effect(**kwargs):
+        raise ValueError("Cannot forward both `prompt` and `prompt_embeds`.")
+
+    gen, _ = _make_generator_with_pipeline_side_effect(side_effect)
+    try:
+        gen.generate("a happy cat", width=512, height=512)
+    except ValueError as exc:
+        assert "prompt_embeds" in str(exc)
+    else:
+        raise AssertionError("expected ValueError to propagate")

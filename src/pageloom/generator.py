@@ -102,6 +102,17 @@ class IllustrationGenerator:
         # different blackout path -- a black frame is never a valid result.
         self.safety_max_retries = _safety_max_retries()
 
+    @staticmethod
+    def _round_to_multiple_8(dim: int) -> int:
+        """Round a generation dimension up to the nearest multiple of 8.
+
+        Stable Diffusion's VAE requires both dimensions to be multiples of 8,
+        or ``check_inputs()`` raises ``ValueError``. Example-page dimensions
+        come from the source image's raw pixel size and are not guaranteed to
+        satisfy that constraint, so this rounds up by at most 7 pixels.
+        """
+        return ((int(dim) + 7) // 8) * 8
+
     def generate(
         self,
         prompt: str,
@@ -114,6 +125,13 @@ class IllustrationGenerator:
     ) -> Image.Image:
         max_retries = getattr(self, "safety_max_retries", _safety_max_retries())
         attempt = 0
+        # Stable Diffusion's VAE requires width/height to be multiples of 8;
+        # `Pipeline.run()` rounds before calling us, but a library caller can
+        # pass odd sizes directly. Defense-in-depth: round up and retry once
+        # when the pipeline raises `check_inputs()`' ValueError.
+        width = self._round_to_multiple_8(width)
+        height = self._round_to_multiple_8(height)
+        rounded = False
         while True:
             # Vary the latent seed per attempt so a safety-checker blackout
             # (which is seed-dependent) gets a fresh draw rather than
@@ -122,15 +140,38 @@ class IllustrationGenerator:
             generator = None
             if attempt_seed is not None:
                 generator = torch.Generator(device=self.device).manual_seed(attempt_seed)
-            result = self.pipeline(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                width=width,
-                height=height,
-                num_inference_steps=num_inference_steps,
-                guidance_scale=guidance_scale,
-                generator=generator,
-            )
+            try:
+                result = self.pipeline(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    width=width,
+                    height=height,
+                    num_inference_steps=num_inference_steps,
+                    guidance_scale=guidance_scale,
+                    generator=generator,
+                )
+            except ValueError as exc:
+                message = str(exc)
+                if (
+                    not rounded
+                    and "divisible by 8" in message
+                    and width % 8 == 0
+                    and height % 8 == 0
+                ):
+                    # Already rounded above, yet still rejected: bump to the
+                    # next multiple of 8 in case the failure reported different
+                    # dimensions than we passed (defensive, retry once only).
+                    rounded = True
+                    width = self._round_to_multiple_8(width + 8)
+                    height = self._round_to_multiple_8(height + 8)
+                    print(
+                        "Warning: pipeline rejected width/height as not divisible "
+                        f"by 8 (got {width}x{height}); retrying rounded to "
+                        f"{width}x{height}.",
+                        file=sys.stderr,
+                    )
+                    continue
+                raise
             images = getattr(result, "images", None) or []
             if not images:
                 return Image.new("RGB", (width, height), color="gray")
