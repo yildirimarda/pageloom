@@ -241,17 +241,43 @@ def test_production_generator_disables_safety_checker(mock_mps, mock_cuda, mock_
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
 @patch("pageloom.generator.torch.cuda.is_available", return_value=False)
 @patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
-def test_from_pretrained_called_with_safety_checker_none(mock_mps, mock_cuda, mock_from_pretrained):
-    """The checker must be disabled at load time, not only after load.
+def test_subclass_needs_no_safety_checker_clear(mock_mps, mock_cuda, mock_from_pretrained):
+    """Subclasses like _FastSDGenerator need no safety_checker/feature_extractor clear.
 
-    With diffusers >= 0.40 a late ``pipeline.safety_checker = None`` leaves the
-    unused checker module resident in VRAM/RAM for the whole run; passing
-    ``safety_checker=None`` (and ``feature_extractor=None``) to from_pretrained
-    never loads it. Locks in the PLAN.md item: assert the load-time kwargs.
+    When from_pretrained returns a pipeline that still has a non-None
+    safety_checker/feature_extractor sentinel, super().__init__ must already
+    clear both before the subclass body runs. A _RealFastGenerator-style
+    subclass with only steps/seed state and no clear lines should see None after
+    construction.
     """
     mock_pipeline = MagicMock()
     mock_pipeline.to.side_effect = lambda device: mock_pipeline
-    mock_pipeline.feature_extractor = object()  # simulate a loader that still set it
+    # Simulate an older/mock loader that still set these to non-None sentinels.
+    mock_pipeline.safety_checker = object()
+    mock_pipeline.feature_extractor = object()
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    class _NoClearSubclass(IllustrationGenerator):
+        def __init__(self):
+            super().__init__(verify_license=False)
+            self._steps = 8
+
+    gen = _NoClearSubclass()
+    # Base class cleared both before the subclass line below; production also
+    # cleared at from_pretrained, so either path is covered.
+    assert gen.pipeline.safety_checker is None
+    assert gen.pipeline.feature_extractor is None
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_from_pretrained_called_with_safety_checker_none(mock_mps, mock_cuda, mock_from_pretrained):
+    """Load-time kwargs, not only a post-load clear."""
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_pipeline.feature_extractor = object()
     mock_from_pretrained.return_value = mock_pipeline
     from pageloom.generator import IllustrationGenerator
 
@@ -259,7 +285,6 @@ def test_from_pretrained_called_with_safety_checker_none(mock_mps, mock_cuda, mo
     kwargs = mock_from_pretrained.call_args.kwargs
     assert kwargs.get("safety_checker") is None
     assert kwargs.get("feature_extractor") is None
-    # belt-and-braces fallback for overridden loaders still applies
     assert mock_pipeline.safety_checker is None
     assert mock_pipeline.feature_extractor is None
 

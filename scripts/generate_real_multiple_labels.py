@@ -45,14 +45,9 @@ class _RealFastGenerator(IllustrationGenerator):
 
     def __init__(self, steps: int = STEPS, base_seed: int = SEED, **kwargs) -> None:
         super().__init__(**kwargs)
-        # The production IllustrationGenerator now loads SD1.5 with
-        # safety_checker=None/feature_extractor=None at from_pretrained time
-        # (the checker used to false-positive on benign children's-book subjects
-        # like "banana"/"cherry" and black out the image), so nothing to disable
-        # here beyond a belt-and-braces fallback for older loaders.
-        self.pipeline.safety_checker = None
-        if getattr(self.pipeline, "feature_extractor", None) is not None:
-            self.pipeline.feature_extractor = None
+        # safety_checker is disabled by the production IllustrationGenerator at
+        # from_pretrained time (safety_checker=None/feature_extractor=None); see
+        # pageloom.generator.IllustrationGenerator. No clear needed here.
         self.steps = steps
         self.base_seed = base_seed
         self._call = 0
