@@ -207,10 +207,13 @@ def test_real_sd_generation_multiple_labels_three_pairs(tmp_path):
 
         def __init__(self, steps: int = 8, base_seed: int = 1234) -> None:
             super().__init__(verify_license=False)
-            # SD1.5's safety checker false-positives on benign subjects like
-            # "banana"/"cherry" and blacks out the image, hiding the pictures.
+            # Production already loads the pipeline with safety_checker=None
+            # (the checker false-positives on subjects like "banana"/"cherry"
+            # and blacks out the image); keep a late clear as a fallback for
+            # loaders that still set it.
             self.pipeline.safety_checker = None
-            self.pipeline.feature_extractor = None
+            if getattr(self.pipeline, "feature_extractor", None) is not None:
+                self.pipeline.feature_extractor = None
             self._steps = steps
             self._base_seed = base_seed
             self._call = 0

@@ -135,6 +135,21 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   `tests/test_generator.py` only ever exercises sizes the mock pipeline accepts, so this
   exact crash path is untested at the generator layer.
 
+- [ ] Remove the now-redundant per-subclass `safety_checker`/`feature_extractor`
+  clear-after-super().__init__ blocks from `scripts/generate_real_multiple_labels.py`
+  and `tests/test_real_multiple_labels.py::test_real_sd_generation_multiple_labels_three_pairs`
+  (both only ever exercised the late-assignment workaround, since production never
+  loaded with `safety_checker=None`); with load-time `safety_checker=None` the
+  production path already covers them, and the belt-and-braces late clear that
+  remains in `IllustrationGenerator.__init__` subsumes what those blocks did —
+  replace them with a comment pointing at the production default (or keep only a
+  guarded `if getattr(...)` fallback), so future readers don't think the evidence
+  path still depends on a manual, non-production workaround. Cover with a test that
+  asserts `_RealFastGenerator`/`_FastSDGenerator`-style subclasses need no
+  checker-clearing code of their own (i.e. constructing them against a mocked
+  `from_pretrained` that sets `safety_checker` to a sentinel leaves it `None` after
+  `super().__init__`, before any subclass line runs).
+
 - [ ] Load the Stable Diffusion pipeline with `safety_checker=None` (and
   `feature_extractor=None`) at `from_pretrained` time instead of setting
   `pipeline.safety_checker = None` after load: with diffusers >= 0.40 the late

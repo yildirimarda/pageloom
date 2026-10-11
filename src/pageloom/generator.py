@@ -78,6 +78,8 @@ class IllustrationGenerator:
                 self.model_id,
                 torch_dtype=self.torch_dtype,
                 cache_dir=cache_dir,
+                safety_checker=None,
+                feature_extractor=None,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -92,10 +94,14 @@ class IllustrationGenerator:
         # verified live (2026-10 audit: a "red apple on a white background" prompt
         # returned 100% black pixels). PageLoom only ever generates family-friendly
         # content (letters, numbers, fruit, animals), so disable the safety filter
-        # to keep generated pages visually sensible. This mirrors the workaround
-        # already used by scripts/generate_real_multiple_labels.py; making it the
-        # production default is the recorded Discovered gap (see PLAN.md).
+        # to keep generated pages visually sensible. Loaded via
+        # ``safety_checker=None``/``feature_extractor=None`` at from_pretrained
+        # time (diffusers >= 0.40 leaves the unused checker module resident if
+        # cleared only after load); the late assignment remains as a belt-and-
+        # braces fallback for pipelines built by overridden/older loaders.
         self.pipeline.safety_checker = None
+        if getattr(self.pipeline, "feature_extractor", None) is not None:
+            self.pipeline.feature_extractor = None
         # Belt and braces: disabling the checker above is the primary fix, but
         # generate() also black-frame-detects and retries (with a fresh seed)
         # in case a caller re-enables the checker or a future model ships a
