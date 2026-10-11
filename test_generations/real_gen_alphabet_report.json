@@ -1,0 +1,87 @@
+{
+  "kind": "alphabet",
+  "human_page_type": "alphabet letter+word page",
+  "example_image": "/work/examples_real/real_alphabet_page.png",
+  "vision": {
+    "source": "heuristic_fallback",
+    "fallback_warning_on_stderr": true,
+    "stderr_snippet": "Warning: vision-based page analysis failed, falling back to heuristic classification: Vision-based page analysis failed: Vision model returned empty content The selected model/provider does not appear to support image input. Set OPENROUTER_VISION_MODEL to a vision-capable model, or unset it to use the free auto-router (openrouter/free), which selects one automatically -- see README for how to find",
+    "note": "vision empty/prose (retried)",
+    "elapsed_seconds": 47.1
+  },
+  "detected_structure": {
+    "content_pattern": "single_letter_word_illustration",
+    "element_count": 1,
+    "arrangement": "centered",
+    "text_image_relationship": "label_per_image",
+    "image_size": [
+      612,
+      612
+    ]
+  },
+  "example_content_items_from_vision": null,
+  "contents_used": [
+    "A Apple",
+    "C Cherry",
+    "D Dragonfruit"
+  ],
+  "sd": {
+    "real_stable_diffusion": true,
+    "model_id": "runwayml/stable-diffusion-v1-5",
+    "inference_steps": 6,
+    "elapsed_seconds": 220.1,
+    "generator_calls": 3,
+    "call_log": [
+      {
+        "index": 1,
+        "seconds": 74.0
+      },
+      {
+        "index": 2,
+        "seconds": 72.7
+      },
+      {
+        "index": 3,
+        "seconds": 73.1
+      }
+    ],
+    "safety_checker_disabled_in_prod": true
+  },
+  "output_pdf": "/work/test_generations/real_gen_alphabet.pdf",
+  "page_count": 3,
+  "page_verification": [
+    {
+      "page_index": 0,
+      "dark_frac": 0.108,
+      "colored_frac_upper": 0.753,
+      "label_dark_pixels": 22305,
+      "label_frac": 0.198,
+      "has_picture": true,
+      "has_label": true,
+      "not_blacked_out": true
+    },
+    {
+      "page_index": 1,
+      "dark_frac": 0.114,
+      "colored_frac_upper": 0.809,
+      "label_dark_pixels": 27723,
+      "label_frac": 0.246,
+      "has_picture": true,
+      "has_label": true,
+      "not_blacked_out": true
+    },
+    {
+      "page_index": 2,
+      "dark_frac": 0.188,
+      "colored_frac_upper": 0.615,
+      "label_dark_pixels": 27662,
+      "label_frac": 0.246,
+      "has_picture": true,
+      "has_label": true,
+      "not_blacked_out": true
+    }
+  ],
+  "all_pages_blacked_out": false,
+  "all_pages_have_picture": true,
+  "all_pages_have_label": true
+}
