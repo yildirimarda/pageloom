@@ -135,7 +135,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   `tests/test_generator.py` only ever exercises sizes the mock pipeline accepts, so this
   exact crash path is untested at the generator layer.
 
-- [ ] Remove the now-redundant per-subclass `safety_checker`/`feature_extractor`
+- [x] Remove the now-redundant per-subclass `safety_checker`/`feature_extractor`
   clear-after-super().__init__ blocks from `scripts/generate_real_multiple_labels.py`
   and `tests/test_real_multiple_labels.py::test_real_sd_generation_multiple_labels_three_pairs`
   (both only ever exercised the late-assignment workaround, since production never
