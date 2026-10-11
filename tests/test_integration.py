@@ -3,6 +3,10 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
+    StableDiffusionPipeline,
+)
 from PIL import Image
 from pypdf import PdfReader
 
@@ -10,21 +14,48 @@ from pageloom.consistency import ConsistencyGuard
 from pageloom.page_structure_classifier import PageStructureClassifier
 from pageloom.pipeline import Pipeline
 
+# The real Stable Diffusion VAE rejects any generation size that is not a
+# multiple of 8 (Milestone 8); _assert_diffusers_accepts below runs that check.
+
+
+def _assert_diffusers_accepts(width: int, height: int) -> None:
+    """Run the *real* diffusers dimension check on a mock-generator call.
+
+    The mock generator itself does not render an image, so it would happily
+    return a picture no matter what size it was asked for -- which is exactly
+    how the original 618x800 crash slipped through every existing test. Calling
+    ``check_inputs`` here means the test fails if (and only if) the pipeline
+    hands the generator a size real Stable Diffusion would reject.
+    """
+    StableDiffusionPipeline.check_inputs(None, "prompt", int(height), int(width), 1)
+
+
+def test_check_inputs_rejects_odd_dimensions() -> None:
+    """Sanity check that the real diffusers check still behaves as Milestone 8
+    describes -- otherwise _assert_diffusers_accepts below would pass vacuously."""
+    with pytest.raises(ValueError, match="divisible by 8"):
+        StableDiffusionPipeline.check_inputs(None, "prompt", 800, 618, 1)
+    StableDiffusionPipeline.check_inputs(None, "prompt", 800, 624, 1)
+
 
 def test_integration_example_page_to_multi_page_pdf(tmp_path: Path):
     """Feed a single example image to Pipeline and produce a matching multi-page PDF."""
-    # 1. Create a synthetic example page
+    # 1. Create a synthetic example page. 618x800 is the exact size from the
+    # Milestone 8 bug report: 618 is not divisible by 8, so a pipeline that
+    # passes raw page dimensions through would crash real diffusers.
     example_path = tmp_path / "example.png"
-    example_img = Image.new("RGB", (612, 612), color="purple")
+    example_img = Image.new("RGB", (618, 800), color="purple")
     example_img.save(example_path)
 
     # 2. Mock generator so we don't load the Stable Diffusion model
     mock_gen = MagicMock()
 
     def make_image(prompt: str, **kwargs) -> Image.Image:
+        # Fail loudly (with diffusers' own message) if the size is invalid.
+        _assert_diffusers_accepts(int(kwargs.get("width", 512)), int(kwargs.get("height", 512)))
         # Return a distinct image per prompt so we can verify multi-page output
         color = (hash(prompt) % 256, (hash(prompt) // 256) % 256, 128)
-        return Image.new("RGB", (612, 612), color=color)
+        return Image.new("RGB", (624, 800), color=color)
 
     mock_gen.generate.side_effect = make_image
 
@@ -163,6 +194,9 @@ def test_multi_sub_image_compositing_for_multiple_labels(tmp_path: Path):
     mock_gen = MagicMock()
 
     def make_sub_image(prompt: str, **kwargs) -> Image.Image:
+        # Sub-image sizes are division-derived (e.g. 800 // 3 == 266) and must
+        # also be multiples of 8 before they reach a real diffusers call.
+        _assert_diffusers_accepts(int(kwargs.get("width", 512)), int(kwargs.get("height", 512)))
         # Return a small colored image so compositing is visible
         return Image.new("RGB", (200, 200), color=(hash(prompt) % 256, 0, 255))
 
