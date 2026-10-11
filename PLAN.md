@@ -135,7 +135,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   `tests/test_generator.py` only ever exercises sizes the mock pipeline accepts, so this
   exact crash path is untested at the generator layer.
 
-- [ ] Load the Stable Diffusion pipeline with `safety_checker=None` (and
+- [x] Load the Stable Diffusion pipeline with `safety_checker=None` (and
   `feature_extractor=None`) at `from_pretrained` time instead of setting
   `pipeline.safety_checker = None` after load: with diffusers >= 0.40 the late
   assignment leaves a live checker module sitting in VRAM/RAM for the whole
