@@ -19,3 +19,7 @@ build/
 .envrc
 .pageloom_vision/
 .pageloom_raw/
+
+# crash dumps (seen from the torch/libcusparseLt segfault loop)
+core
+core.*

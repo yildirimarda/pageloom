@@ -38,3 +38,18 @@ target-version = "py311"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pageloom"]
+
+# On Linux (the agentloop Docker container has no GPU passthrough), pull the
+# CPU-only torch wheel instead of the default CUDA build. The default build
+# bundles nvidia-* packages (cusparselt, cublas, etc.) extracted to temp dirs
+# at install time; under uv's resolver this has repeatedly produced broken
+# installs (missing libcusparseLt.so.0, torch segfaulting with a core dump)
+# that made agent sessions loop for hours. macOS keeps the default PyPI wheel
+# (MPS-capable, no CUDA bloat to begin with).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
