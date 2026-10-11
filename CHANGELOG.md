@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/yildirimarda/pageloom/compare/v0.2.0...v0.3.0) (2026-10-11)
+
+
+### Features
+
+* wire ConsistencyGuard into the generation path with vision_analyzer ([#64](https://github.com/yildirimarda/pageloom/issues/64)) ([e1d96b4](https://github.com/yildirimarda/pageloom/commit/e1d96b4951619ec71ae4b56aac02a2e32b446ee6))
+
+
+### Bug Fixes
+
+* correct lmstudio model id to match LM Studio's actual /v1/models output (qwen/qwen3.8-27b) ([ee8e6b4](https://github.com/yildirimarda/pageloom/commit/ee8e6b4f13eabb4b6aead635817b7414be046d55))
+* load Stable Diffusion pipeline with safety_checker=None at from_pretrained ([#78](https://github.com/yildirimarda/pageloom/issues/78)) ([2718ce7](https://github.com/yildirimarda/pageloom/commit/2718ce7fa587e99126be7a27cc09677adaef9dcc))
+* pin CPU-only torch on Linux to stop CUDA-lib segfault loop ([3500fd1](https://github.com/yildirimarda/pageloom/commit/3500fd147fb9715fd97c694d7483d22eb4a69bbc))
+* round SD generation dimensions to multiples of 8 before diffusers calls ([#63](https://github.com/yildirimarda/pageloom/issues/63)) ([d459528](https://github.com/yildirimarda/pageloom/commit/d45952853b5101a665aead34e97c256f04defae6))
+
 ## [0.2.0](https://github.com/yildirimarda/pageloom/compare/v0.1.0...v0.2.0) (2026-09-13)
 
 
