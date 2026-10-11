@@ -62,8 +62,13 @@ def _get_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         return ImageFont.load_default()
 
 
-def _draw_centered(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-                   y: int, fill=(30, 30, 30)) -> int:
+def _draw_centered(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    y: int,
+    fill=(30, 30, 30),
+) -> int:
     bbox = font.getbbox(text)
     tw = bbox[2] - bbox[0]
     x = (PAGE_W - tw) // 2
@@ -71,8 +76,9 @@ def _draw_centered(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTyp
     return bbox[3] - bbox[1]
 
 
-def _gen_illustration(generator: IllustrationGenerator, prompt: str, idx: int,
-                      size: int = 320) -> Image.Image:
+def _gen_illustration(
+    generator: IllustrationGenerator, prompt: str, idx: int, size: int = 320
+) -> Image.Image:
     """Generate one real SD illustration (safety checker already disabled in prod)."""
     img = generator.generate(
         prompt=prompt,
@@ -82,7 +88,7 @@ def _gen_illustration(generator: IllustrationGenerator, prompt: str, idx: int,
         seed=SEED + idx,
     )
     if not isinstance(img, Image.Image):
-        raise RuntimeError(f"SD returned non-image for {prompt}")
+        raise TypeError(f"SD returned non-image for {prompt}")
     return img.convert("RGB").resize((size, size))
 
 
@@ -133,7 +139,6 @@ def make_matching_page(generator: IllustrationGenerator) -> Image.Image:
     page = _blank()
     draw = ImageDraw.Draw(page)
     word_font = _get_font(70)
-    sub_font = _get_font(30)
     pic_size = 160
     n = len(MATCHING_LABELS)
     slot_w = PAGE_W // n
@@ -141,16 +146,25 @@ def make_matching_page(generator: IllustrationGenerator) -> Image.Image:
     pic_top = img_top + 110
     for i, label in enumerate(MATCHING_LABELS):
         cx = slot_w * i + slot_w // 2
-        ill = _gen_illustration(generator, ILLUSTRATION_PROMPTS[f"matching_{label.lower()}"], 2 + i, size=pic_size)
+        ill = _gen_illustration(
+            generator, ILLUSTRATION_PROMPTS[f"matching_{label.lower()}"], 2 + i, size=pic_size
+        )
         page.paste(ill, (cx - pic_size // 2, pic_top))
-        draw.text((cx - pic_size // 2, pic_top + pic_size + 14), label, fill=(30, 30, 30), font=word_font)
+        draw.text(
+            (cx - pic_size // 2, pic_top + pic_size + 14), label, fill=(30, 30, 30), font=word_font
+        )
         # word label is centered under its picture
         bbox = word_font.getbbox(label)
         tw = bbox[2] - bbox[0]
         draw.text((cx - tw // 2, pic_top + pic_size + 14), label, fill=(30, 30, 30), font=word_font)
     # title
     title = "Match the picture to its name"
-    draw.text(((PAGE_W - _get_font(34).getbbox(title)[2]) // 2, 24), title, fill=(30, 30, 30), font=_get_font(34))
+    draw.text(
+        ((PAGE_W - _get_font(34).getbbox(title)[2]) // 2, 24),
+        title,
+        fill=(30, 30, 30),
+        font=_get_font(34),
+    )
     return page
 
 
@@ -173,9 +187,12 @@ def main() -> None:
         path = OUT_DIR / fname
         page.save(str(path), "PNG")
         colors = len(np.unique(np.asarray(page).reshape(-1, 3)[::200], axis=0))
-        print(f"  wrote {path} ({path.stat().st_size} bytes, {colors} colors) in {time.time()-t1:.1f}s", flush=True)
+        print(
+            f"  wrote {path} ({path.stat().st_size} bytes, {colors} colors) in {time.time() - t1:.1f}s",
+            flush=True,
+        )
         out[fname] = str(path)
-    print(f"done in {time.time()-t0:.1f}s")
+    print(f"done in {time.time() - t0:.1f}s")
 
 
 if __name__ == "__main__":

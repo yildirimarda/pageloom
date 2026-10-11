@@ -40,7 +40,6 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
 import sys
 import time
 import warnings
@@ -54,9 +53,9 @@ import numpy as np
 from PIL import Image
 
 from pageloom.generator import IllustrationGenerator
-from pageloom.pipeline import Pipeline, round_to_multiple
-from pageloom.vision import PageVisionAnalyzer, VisionAnalysisError, _VISION_CACHE_DIR
-from pageloom.page_structure_classifier import detect_structure, PageStructureClassifier
+from pageloom.page_structure_classifier import PageStructureClassifier, detect_structure
+from pageloom.pipeline import Pipeline
+from pageloom.vision import _VISION_CACHE_DIR, PageVisionAnalyzer, VisionAnalysisError
 
 REAL_EXAMPLES = Path(__file__).resolve().parent.parent / "examples_real"
 OUT_DIR = Path(__file__).resolve().parent.parent / "test_generations"
@@ -98,8 +97,16 @@ class FastRealGenerator(IllustrationGenerator):
         self._call = 0
         self._call_log: list[dict] = []
 
-    def generate(self, prompt, negative_prompt="", width=512, height=512,
-                 num_inference_steps=None, guidance_scale=7.5, seed=None):
+    def generate(
+        self,
+        prompt,
+        negative_prompt="",
+        width=512,
+        height=512,
+        num_inference_steps=None,
+        guidance_scale=7.5,
+        seed=None,
+    ):
         if num_inference_steps is None:
             num_inference_steps = self.steps
         if seed is None:
@@ -107,8 +114,13 @@ class FastRealGenerator(IllustrationGenerator):
         self._call += 1
         t0 = time.time()
         img = super().generate(
-            prompt=prompt, negative_prompt=negative_prompt, width=width, height=height,
-            num_inference_steps=num_inference_steps, guidance_scale=guidance_scale, seed=seed,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
+            seed=seed,
         )
         self._call_log.append({"index": self._call, "seconds": round(time.time() - t0, 1)})
         return img
@@ -170,27 +182,33 @@ def _page_verification(pages: list[Image.Image]) -> list[dict]:
         dark = mean < 60
         white = mean > 245
         dark_frac = float(dark.sum()) / (H * W)
-        colored = (~white) & (~dark) & (
-            (np.abs(arr[:, :, 0] - arr[:, :, 1]) > 25)
-            | (np.abs(arr[:, :, 1] - arr[:, :, 2]) > 25)
+        colored = (
+            (~white)
+            & (~dark)
+            & (
+                (np.abs(arr[:, :, 0] - arr[:, :, 1]) > 25)
+                | (np.abs(arr[:, :, 1] - arr[:, :, 2]) > 25)
+            )
         )
         # label lives in the lower band
-        band = arr[int(H * 0.7):]
+        band = arr[int(H * 0.7) :]
         band_mean = band.mean(axis=2)
         band_dark = (band_mean < 90).sum()
         band_total = band.shape[0] * band.shape[1]
         pic_h = int(H * 0.70)
         upper_colored = colored[:pic_h].sum() / max(1, (pic_h * W))
-        results.append({
-            "page_index": i,
-            "dark_frac": round(dark_frac, 3),
-            "colored_frac_upper": round(float(upper_colored), 3),
-            "label_dark_pixels": int(band_dark),
-            "label_frac": round(float(band_dark) / max(1, band_total), 3),
-            "has_picture": bool(upper_colored > 0.05),
-            "has_label": bool(band_dark > 100),
-            "not_blacked_out": bool(dark_frac < 0.30),
-        })
+        results.append(
+            {
+                "page_index": i,
+                "dark_frac": round(dark_frac, 3),
+                "colored_frac_upper": round(float(upper_colored), 3),
+                "label_dark_pixels": int(band_dark),
+                "label_frac": round(float(band_dark) / max(1, band_total), 3),
+                "has_picture": bool(upper_colored > 0.05),
+                "has_label": bool(band_dark > 100),
+                "not_blacked_out": bool(dark_frac < 0.30),
+            }
+        )
     return results
 
 
@@ -229,11 +247,10 @@ def generate_for(kind: str) -> dict:
         page_structure=structure,
         generator=gen,
         verify_consistency=False,  # per-page vision re-check would burn the free tier;
-                                   # structural consistency is verified by rendering below
+        # structural consistency is verified by rendering below
     )
     pdf_name = f"real_gen_{kind}.pdf"
     pdf_path = OUT_DIR / pdf_name
-    pages = []
     t1 = time.time()
     result = pipeline.run(
         contents=page_contents,
@@ -243,8 +260,11 @@ def generate_for(kind: str) -> dict:
         force=True,
     )
     sd_elapsed = round(time.time() - t1, 1)
-    print(f"  generated {len(page_contents)} page(s) in {sd_elapsed}s -> {result} "
-          f"({len(gen._call_log)} SD calls)", flush=True)
+    print(
+        f"  generated {len(page_contents)} page(s) in {sd_elapsed}s -> {result} "
+        f"({len(gen._call_log)} SD calls)",
+        flush=True,
+    )
 
     # Re-open the compiled PDF pages for verification rendering
     import pymupdf
@@ -290,9 +310,11 @@ def generate_for(kind: str) -> dict:
     }
     (OUT_DIR / f"real_gen_{kind}_report.json").write_text(json.dumps(report, indent=2))
     print(f"  report: {OUT_DIR / f'real_gen_{kind}_report.json'}", flush=True)
-    print(f"  pages blacked={report['all_pages_blacked_out']} "
-          f"pic={report['all_pages_have_picture']} label={report['all_pages_have_label']}",
-          flush=True)
+    print(
+        f"  pages blacked={report['all_pages_blacked_out']} "
+        f"pic={report['all_pages_have_picture']} label={report['all_pages_have_label']}",
+        flush=True,
+    )
     return report
 
 
