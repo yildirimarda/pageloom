@@ -164,3 +164,4 @@ Leave the `PLAN.md` checkbox unchecked. Then stop.
 - Dependencies: `uv sync` / `uv add <package>`
 - Source:       `src/pageloom/`
 - Tests dir:    `tests/`
+- Image backend work (providers, local model, generalization): read `docs/IMAGE-BACKENDS.md` first
