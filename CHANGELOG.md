@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.1](https://github.com/yildirimarda/pageloom/compare/v0.3.0...v0.3.1) (2026-11-10)
+
+
+### Documentation
+
+* plan online image providers and local quality fixes, generalize README ([#81](https://github.com/yildirimarda/pageloom/issues/81)) ([8b58c74](https://github.com/yildirimarda/pageloom/commit/8b58c74e0e54c44dd3184e652844ea8a9a3002f1))
+
+
+### Miscellaneous Chores
+
+* cut release 0.3.1 ([#83](https://github.com/yildirimarda/pageloom/issues/83)) ([022c5af](https://github.com/yildirimarda/pageloom/commit/022c5af5bcb737caf993f607f2ffaeb9faae65b4))
+
 ## [0.3.0](https://github.com/yildirimarda/pageloom/compare/v0.2.0...v0.3.0) (2026-10-11)
 
 
