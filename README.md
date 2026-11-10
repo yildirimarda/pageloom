@@ -1,6 +1,8 @@
 # PageLoom
 
-PageLoom is a Python automation pipeline for designing and self-publishing children's books on Amazon KDP. It takes one example page — such as an alphabet illustration with a letter and word — and analyzes its visual style, layout, and content pattern, then generates matching pages for the rest of the set while preserving illustration style, color palette, typography, and composition. Illustrations are generated locally via Stable Diffusion using the Hugging Face diffusers library, text is overlaid with Pillow, and pages are compiled into a single print-ready PDF sized for KDP. The codebase is fully portable: it runs identically inside a Docker container (CPU or CUDA) and on a local macOS machine via plain Python or uv using Apple's MPS backend, with no behavioral differences beyond generation speed.
+PageLoom is a Python pipeline that generates a set of images from one example. It takes an example image — for instance a page with a letter and a matching illustration — and analyzes its visual style, layout, and content pattern, then generates matching images for the rest of the set while preserving illustration style, color palette, typography, and composition. Images are generated locally via Stable Diffusion using the Hugging Face diffusers library, text is overlaid with Pillow, and the results are compiled into a single PDF. The codebase is fully portable: it runs identically inside a Docker container (CPU or CUDA) and on a local macOS machine via plain Python or uv using Apple's MPS backend, with no behavioral differences beyond generation speed.
+
+The pipeline itself (analyze an example, generate matching outputs, compose them) is not tied to one kind of content. Some defaults still come from the project's origin as an illustrated-page generator: the built-in prompts are written for illustrated pages and the default page size is a 612 x 612 pt square. These are being generalized, and the page size is already configurable (`PDFCompiler(page_size=...)`).
 
 ## Installation
 
@@ -229,7 +231,7 @@ pipeline = Pipeline(example_image="example.png", description="alphabet letter wo
 # (avoids the extra vision API call per page on a first run).
 result = pipeline.run(
     themes=["fruit", "tropical", "orchard"],
-    output_path="children_book.pdf",
+    output_path="pages.pdf",
     page_format="standard",
 )
 print(f"PDF written to: {result}")
@@ -274,11 +276,11 @@ After running the pipeline, the output directory should contain:
 
 ```
 outputs/
-  output.pdf          # compiled print-ready KDP PDF (612 x 612 pts, 72 dpi)
+  output.pdf          # compiled PDF (612 x 612 pts by default, 72 dpi)
   # Intermediate files are cleaned up automatically by PDFCompiler
 ```
 
-The PDF compiler (`PDFCompiler`) creates temporary `.pdf` files per page and removes them after writing the final output, keeping the workspace clean. The final PDF uses a standard KDP children's book square page size of 612 x 612 points (8.5 in x 8.5 in at 72 dpi).
+The PDF compiler (`PDFCompiler`) creates temporary `.pdf` files per page and removes them after writing the final output, keeping the workspace clean. The default page size is a 612 x 612 point square (8.5 in x 8.5 in at 72 dpi); pass `page_size=(width, height)` in points to `PDFCompiler` for another size.
 
 ## Troubleshooting Notes
 
