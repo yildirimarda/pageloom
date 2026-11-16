@@ -92,6 +92,27 @@ def get_image_model() -> str | None:
     return os.environ.get("PAGELOOM_IMAGE_MODEL") or None
 
 
+def get_image_strength() -> float:
+    """Image-to-image strength for local Stable Diffusion reference conditioning.
+
+    ``0.0`` (the default) means off: plain text-to-image generation and the
+    example page is not used as a reference. Any value in ``(0, 1]`` enables
+    image-to-image generation with the example page as the reference image;
+    higher values make the output follow the reference more closely.
+
+    Override with the ``PAGELOOM_IMAGE_STRENGTH`` environment variable. Values
+    outside ``[0, 1]`` are clamped.
+    """
+    raw = os.environ.get("PAGELOOM_IMAGE_STRENGTH")
+    if raw is None or raw.strip() == "":
+        return 0.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 0.0
+    return max(0.0, min(1.0, value))
+
+
 def get_openai_image_model() -> str:
     """OpenAI image-generation model id.
 

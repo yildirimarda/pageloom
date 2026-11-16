@@ -514,3 +514,132 @@ def test_illustration_generator_is_thin_alias_over_local_diffusers_provider(
     assert isinstance(gen, ImageProvider)
     # The SD-specific helpers live on the provider and are still reachable.
     assert IllustrationGenerator._round_to_multiple_8(618) == 624
+
+
+@patch("pageloom.providers.local_diffusers.StableDiffusionImg2ImgPipeline.from_pretrained")
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.providers.local_diffusers.torch.cuda.is_available", return_value=False)
+@patch("pageloom.providers.local_diffusers.torch.backends.mps.is_available", return_value=False)
+def test_local_provider_sends_reference_to_img2img_when_strength_set(
+    mock_mps,
+    mock_cuda,
+    mock_txt2img_fp,
+    mock_img2img_fp,
+):
+    """With image_strength > 0, generate() calls the img2img pipeline with the
+    reference image (references[0]) and strength, so the example page reaches
+    diffusers as a conditioning image."""
+    from PIL import Image
+
+    from pageloom.providers.local_diffusers import LocalDiffusersProvider
+
+    mock_txt2img_pipeline = MagicMock()
+    mock_txt2img_pipeline.to.side_effect = lambda device: mock_txt2img_pipeline
+    mock_txt2img_pipeline.scheduler.config = {}
+    mock_txt2img_fp.return_value = mock_txt2img_pipeline
+
+    mock_img2img_pipeline = MagicMock()
+    mock_img2img_pipeline.to.side_effect = lambda device: mock_img2img_pipeline
+    mock_img2img_pipeline.scheduler.config = {}
+    captured: dict = {}
+
+    def img2img_side_effect(**kwargs):
+        captured.update(kwargs)
+        return MagicMock(images=[Image.new("RGB", (512, 512), color="green")])
+
+    mock_img2img_pipeline.side_effect = img2img_side_effect
+    mock_img2img_fp.return_value = mock_img2img_pipeline
+
+    reference = Image.new("RGB", (512, 512), color="blue")
+    provider = LocalDiffusersProvider(image_strength=0.8, verify_license=False)
+
+    assert provider.image_strength == 0.8
+    assert provider.img2img_pipeline is not None
+    assert provider.capabilities.max_reference_images == 1
+
+    result = provider.generate("a cat", width=512, height=512, references=[reference])
+
+    assert isinstance(result, Image.Image)
+    # The reference image and strength must reach the img2img pipeline.
+    assert captured["image"] is reference
+    assert captured["strength"] == 0.8
+    assert captured["prompt"] == "a cat"
+    assert captured["width"] == 512
+    assert captured["height"] == 512
+    # Plain text-to-image pipeline must not be used.
+    mock_txt2img_pipeline.assert_not_called()
+
+
+@patch("pageloom.providers.local_diffusers.StableDiffusionImg2ImgPipeline.from_pretrained")
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.providers.local_diffusers.torch.cuda.is_available", return_value=False)
+@patch("pageloom.providers.local_diffusers.torch.backends.mps.is_available", return_value=False)
+def test_local_provider_keeps_txt2img_when_strength_off(
+    mock_mps,
+    mock_cuda,
+    mock_txt2img_fp,
+    mock_img2img_fp,
+):
+    """With image_strength == 0 (the default), generate() uses the text-to-image
+    pipeline and ignores references; no img2img pipeline is loaded."""
+    from PIL import Image
+
+    from pageloom.providers.local_diffusers import LocalDiffusersProvider
+
+    mock_txt2img_pipeline = MagicMock()
+    mock_txt2img_pipeline.to.side_effect = lambda device: mock_txt2img_pipeline
+    mock_txt2img_pipeline.scheduler.config = {}
+    captured: dict = {}
+
+    def txt2img_side_effect(**kwargs):
+        captured.update(kwargs)
+        return MagicMock(images=[Image.new("RGB", (512, 512), color="green")])
+
+    mock_txt2img_pipeline.side_effect = txt2img_side_effect
+    mock_txt2img_fp.return_value = mock_txt2img_pipeline
+
+    reference = Image.new("RGB", (512, 512), color="blue")
+    provider = LocalDiffusersProvider(verify_license=False)
+
+    assert provider.image_strength == 0.0
+    assert provider.img2img_pipeline is None
+
+    result = provider.generate("a cat", width=512, height=512, references=[reference])
+
+    assert isinstance(result, Image.Image)
+    # References are ignored on the text-to-image path.
+    assert "image" not in captured
+    assert "strength" not in captured
+    assert captured["prompt"] == "a cat"
+    mock_img2img_fp.assert_not_called()
+
+
+def test_image_strength_defaults_to_off():
+    """PAGELOOM_IMAGE_STRENGTH defaults to 0.0 (off) and is clamped to [0, 1]."""
+    from pageloom import settings
+
+    assert settings.get_image_strength() == 0.0
+
+
+def test_image_strength_reads_env_var(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_IMAGE_STRENGTH", "0.75")
+    import importlib
+
+    from pageloom import settings
+
+    importlib.reload(settings)
+    assert settings.get_image_strength() == 0.75
+
+
+def test_image_strength_clamps_to_unit_interval(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_IMAGE_STRENGTH", "1.5")
+    import importlib
+
+    from pageloom import settings
+
+    importlib.reload(settings)
+    assert settings.get_image_strength() == 1.0
+
+    monkeypatch.setenv("PAGELOOM_IMAGE_STRENGTH", "-0.3")
+    importlib.reload(settings)
+    assert settings.get_image_strength() == 0.0
