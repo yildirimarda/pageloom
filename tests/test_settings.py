@@ -167,3 +167,48 @@ def test_get_image_model_default():
 def test_get_image_model_from_env(monkeypatch):
     monkeypatch.setenv("PAGELOOM_IMAGE_MODEL", "custom/image-model")
     assert settings.get_image_model() == "custom/image-model"
+
+
+def test_get_flux_host_default():
+    assert settings.get_flux_host() == "bfl"
+
+
+def test_get_flux_host_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_FLUX_HOST", "replicate")
+    assert settings.get_flux_host() == "replicate"
+
+
+def test_get_flux_model_default():
+    assert settings.get_flux_model() == "flux-pro-1.1"
+
+
+def test_get_flux_model_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_FLUX_MODEL", "flux-dev")
+    assert settings.get_flux_model() == "flux-dev"
+
+
+def test_get_bfl_api_key_default():
+    assert settings.get_bfl_api_key() is None
+
+
+def test_get_bfl_api_key_from_env(monkeypatch):
+    monkeypatch.setenv("BFL_API_KEY", "bfl-key")
+    assert settings.get_bfl_api_key() == "bfl-key"
+
+
+def test_get_fal_api_key_default():
+    assert settings.get_fal_api_key() is None
+
+
+def test_get_fal_api_key_from_env(monkeypatch):
+    monkeypatch.setenv("FAL_KEY", "fal-key")
+    assert settings.get_fal_api_key() == "fal-key"
+
+
+def test_get_replicate_api_key_default():
+    assert settings.get_replicate_api_key() is None
+
+
+def test_get_replicate_api_key_from_env(monkeypatch):
+    monkeypatch.setenv("REPLICATE_API_KEY", "rep-key")
+    assert settings.get_replicate_api_key() == "rep-key"

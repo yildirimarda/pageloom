@@ -103,3 +103,46 @@ def get_openrouter_image_model() -> str:
     specific free model id, since the model roster changes over time.
     """
     return os.environ.get("OPENROUTER_IMAGE_MODEL", "openrouter/auto")
+
+
+def get_flux_host() -> str:
+    """FLUX host: ``bfl`` (Black Forest Labs' own API), ``fal`` or ``replicate``.
+
+    Override with the ``PAGELOOM_FLUX_HOST`` environment variable.
+    """
+    return os.environ.get("PAGELOOM_FLUX_HOST", "bfl")
+
+
+def get_flux_model() -> str:
+    """Black Forest Labs FLUX.2 model id.
+
+    Override with the ``PAGELOOM_FLUX_MODEL`` environment variable.
+    Defaults to ``flux-pro-1.1``.
+    """
+    return os.environ.get("PAGELOOM_FLUX_MODEL", "flux-pro-1.1")
+
+
+def get_bfl_api_key() -> str | None:
+    """Credential for Black Forest Labs' own API.
+
+    Override with ``BFL_API_KEY`` or ``PAGELOOM_BFL_API_KEY``.
+    """
+    return os.environ.get("BFL_API_KEY") or os.environ.get("PAGELOOM_BFL_API_KEY") or None
+
+
+def get_fal_api_key() -> str | None:
+    """Credential for fal.ai.
+
+    Override with ``FAL_KEY`` or ``PAGELOOM_FAL_KEY``.
+    """
+    return os.environ.get("FAL_KEY") or os.environ.get("PAGELOOM_FAL_KEY") or None
+
+
+def get_replicate_api_key() -> str | None:
+    """Credential for Replicate.
+
+    Override with ``REPLICATE_API_KEY`` or ``PAGELOOM_REPLICATE_API_KEY``.
+    """
+    return (
+        os.environ.get("REPLICATE_API_KEY") or os.environ.get("PAGELOOM_REPLICATE_API_KEY") or None
+    )

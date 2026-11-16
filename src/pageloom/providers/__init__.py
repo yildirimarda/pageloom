@@ -6,6 +6,7 @@ import os
 
 from pageloom import settings
 from pageloom.providers.base import ImageProvider, ImageProviderCapabilities
+from pageloom.providers.bfl import BFLImageProvider
 from pageloom.providers.gemini import GeminiImageProvider
 from pageloom.providers.local_diffusers import LocalDiffusersProvider
 from pageloom.providers.openai import OpenAIImageProvider
@@ -19,6 +20,7 @@ IMAGE_PROVIDER_MAP = {
     "openai": OpenAIImageProvider,
     "gemini": GeminiImageProvider,
     "openrouter": OpenRouterImageProvider,
+    "flux": BFLImageProvider,
 }
 
 # Environment variables (in preference order) that supply the credential for
@@ -29,6 +31,7 @@ IMAGE_PROVIDER_CREDENTIAL_ENV_VARS: dict[str, list[str]] = {
     "openai": ["OPENAI_API_KEY"],
     "gemini": ["GEMINI_API_KEY"],
     "openrouter": ["OPENROUTER_API_KEY"],
+    "flux": ["BFL_API_KEY", "FAL_KEY", "REPLICATE_API_KEY"],
 }
 
 
@@ -64,7 +67,10 @@ def build_image_provider(
     required_env = IMAGE_PROVIDER_CREDENTIAL_ENV_VARS.get(provider_name, [])
     if required_env and not api_key:
         missing = [var for var in required_env if not os.environ.get(var)]
-        if missing:
+        # Only raise when *every* candidate credential is absent: a provider
+        # such as ``flux`` accepts any one of several host-specific keys
+        # (BFL_API_KEY, FAL_KEY, REPLICATE_API_KEY) depending on PAGELOOM_FLUX_HOST.
+        if len(missing) == len(required_env):
             raise RuntimeError(
                 f"Image provider '{provider_name}' selected but credential is missing. "
                 f"Set the appropriate environment variable ({', '.join(missing)}) "
@@ -77,6 +83,7 @@ def build_image_provider(
 __all__ = [
     "IMAGE_PROVIDER_CREDENTIAL_ENV_VARS",
     "IMAGE_PROVIDER_MAP",
+    "BFLImageProvider",
     "GeminiImageProvider",
     "ImageProvider",
     "ImageProviderCapabilities",
