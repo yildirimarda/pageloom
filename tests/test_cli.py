@@ -11,6 +11,21 @@ from pageloom.cli import DEFAULT_CONTENTS, main
 from pageloom.consistency import ConsistencyGuard
 from pageloom.vision import VisionAnalysisError
 
+
+def _passing_image(width: int, height: int) -> Image.Image:
+    """A non-uniform illustration that passes the automatic quality gate.
+
+    Solid-colour mock images are now legitimately rejected (they are
+    near-uniform), so a test that represents a successful generation must return
+    a non-uniform image. A horizontal gradient has varying block means (not
+    tiled), low adjacent-pixel difference (not noise-like), and is neither
+    black nor uniform.
+    """
+    img = Image.new("L", (width, height))
+    img.putdata([int(255 * x / max(1, width - 1)) for y in range(height) for x in range(width)])
+    return img.convert("RGB")
+
+
 # Fixed vision result used to keep the generate-path overflow tests hermetic
 # (PLAN.md item 86): without it those tests make real openrouter/free calls
 # whose non-deterministic outcome (sometimes a valid, non-alphabet JSON) would
@@ -1032,8 +1047,8 @@ def test_cli_generate_runs_consistency_guard_with_vision_analyzer(tmp_path: Path
         patch("pageloom.pipeline.ConsistencyGuard", side_effect=make_guard),
     ):
         mock_vision_cls.return_value.analyze.return_value = vision_structure
-        mock_gen_cls.return_value.generate.side_effect = lambda prompt, width, height: Image.new(
-            "RGB", (width, height), color="white"
+        mock_gen_cls.return_value.generate.side_effect = lambda prompt, width, height: (
+            _passing_image(width, height)
         )
 
         result = main(

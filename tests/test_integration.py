@@ -30,6 +30,20 @@ def _assert_diffusers_accepts(width: int, height: int) -> None:
     StableDiffusionPipeline.check_inputs(None, "prompt", int(height), int(width), 1)
 
 
+def _passing_image(width: int, height: int) -> Image.Image:
+    """A non-uniform illustration that passes the automatic quality gate.
+
+    Solid-colour mock images are now legitimately rejected (they are
+    near-uniform), so a test that represents a successful generation must return
+    a non-uniform image. A horizontal gradient has varying block means (not
+    tiled), low adjacent-pixel difference (not noise-like), and is neither
+    black nor uniform.
+    """
+    img = Image.new("L", (width, height))
+    img.putdata([int(255 * x / max(1, width - 1)) for y in range(height) for x in range(width)])
+    return img.convert("RGB")
+
+
 def test_check_inputs_rejects_odd_dimensions() -> None:
     """Sanity check that the real diffusers check still behaves as Milestone 8
     describes -- otherwise _assert_diffusers_accepts below would pass vacuously."""
@@ -52,10 +66,11 @@ def test_integration_example_page_to_multi_page_pdf(tmp_path: Path):
 
     def make_image(prompt: str, **kwargs) -> Image.Image:
         # Fail loudly (with diffusers' own message) if the size is invalid.
-        _assert_diffusers_accepts(int(kwargs.get("width", 512)), int(kwargs.get("height", 512)))
-        # Return a distinct image per prompt so we can verify multi-page output
-        color = (hash(prompt) % 256, (hash(prompt) // 256) % 256, 128)
-        return Image.new("RGB", (624, 800), color=color)
+        width = int(kwargs.get("width", 512))
+        height = int(kwargs.get("height", 512))
+        _assert_diffusers_accepts(width, height)
+        # Return a non-uniform image: solid colours are rejected by the gate.
+        return _passing_image(width, height)
 
     mock_gen.generate.side_effect = make_image
 
@@ -114,8 +129,9 @@ def test_two_structurally_different_example_pages(tmp_path: Path):
     mock_gen = MagicMock()
 
     def make_image(prompt: str, **kwargs) -> Image.Image:
-        color = (hash(prompt) % 256, (hash(prompt) // 256) % 256, 128)
-        return Image.new("RGB", (612, 612), color=color)
+        width = int(kwargs.get("width", 612))
+        height = int(kwargs.get("height", 612))
+        return _passing_image(width, height)
 
     mock_gen.generate.side_effect = make_image
 
@@ -262,7 +278,7 @@ def test_multi_sub_image_compositing_for_multiple_labels(tmp_path: Path):
     assert final_image.size == (616, 616)
 
     # Confirm the image contains multiple distinct colors (sub-images) and dark text.
-    pixels = list(final_image.getdata())
+    pixels = list(final_image.get_flattened_data())
     unique_colors = set(pixels)
     dark_pixels = sum(1 for p in pixels if p[0] < 80 and p[1] < 80 and p[2] < 80)
     assert dark_pixels > 0, "Text overlay should add dark pixels"

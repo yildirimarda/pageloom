@@ -8,6 +8,13 @@ from pageloom.pipeline import Pipeline
 from pageloom.style import StylePromptBuilder
 
 
+def _passing_image(width: int, height: int) -> Image.Image:
+    """A non-uniform illustration that passes the automatic quality gate."""
+    img = Image.new("L", (width, height))
+    img.putdata([int(255 * x / max(1, width - 1)) for y in range(height) for x in range(width)])
+    return img.convert("RGB")
+
+
 def test_style_prompt_builder_object_name():
     builder = StylePromptBuilder("soft watercolor")
     prompt = builder.build(content="apple", page_format="object_name")
@@ -45,7 +52,7 @@ def test_pipeline_run_object_name(mock_compile, tmp_path: Path):
     img = Image.new("RGB", (400, 400), color="green")
     img.save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (400, 400), color="red")
+    mock_gen.generate.return_value = _passing_image(400, 400)
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
@@ -64,7 +71,7 @@ def test_pipeline_run_themed_scene(mock_compile, tmp_path: Path):
     img = Image.new("RGB", (400, 400), color="blue")
     img.save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (400, 400), color="red")
+    mock_gen.generate.return_value = _passing_image(400, 400)
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)

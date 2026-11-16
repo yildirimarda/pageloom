@@ -13,6 +13,7 @@ from pageloom.page_structure_classifier import detect_structure
 from pageloom.pipeline import Pipeline
 from pageloom.providers import IMAGE_PROVIDER_MAP, build_image_provider
 from pageloom.providers.size_negotiation import generate_fitting_slot
+from pageloom.quality_gate import QualityGateError
 from pageloom.vision import PageVisionAnalyzer, VisionAnalysisError
 
 # Default alphabet-style content list used when no explicit contents are given.
@@ -448,12 +449,21 @@ def main(argv: list[str] | None = None) -> int:
             # production defaults (25-30 steps) are used for real runs.
             pipeline.generator.num_inference_steps = 6
 
-        result = pipeline.run(
-            contents=contents,
-            output_path=args.output,
-            page_format=args.format,
-            force=args.force,
-        )
+        try:
+            result = pipeline.run(
+                contents=contents,
+                output_path=args.output,
+                page_format=args.format,
+                force=args.force,
+            )
+        except QualityGateError as exc:
+            print(
+                f"Error: a generated frame failed the quality gate and was rejected "
+                f"({', '.join(exc.reasons)}). No bad image was written to the PDF. "
+                f"Try a different prompt/example or raise PAGELOOM_QUALITY_GATE_MAX_RETRIES.",
+                file=sys.stderr,
+            )
+            return 1
         print(f"Generated {len(contents)} page(s) -> {result}")
         return 0
     finally:

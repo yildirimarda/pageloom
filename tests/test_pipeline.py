@@ -9,6 +9,20 @@ from pageloom.pipeline import Pipeline, round_to_multiple
 from pageloom.providers import ImageProvider, ImageProviderCapabilities, LocalDiffusersProvider
 
 
+def _passing_image(width: int = 512, height: int = 512) -> Image.Image:
+    """A non-uniform illustration that passes the automatic quality gate.
+
+    Solid-colour mock images are now legitimately rejected (they are
+    near-uniform), so a test that represents a successful generation must return
+    a non-uniform image. A horizontal gradient has varying block means (not
+    tiled), low adjacent-pixel difference (not noise-like), and is neither
+    black nor uniform.
+    """
+    img = Image.new("L", (width, height))
+    img.putdata([int(255 * x / max(1, width - 1)) for y in range(height) for x in range(width)])
+    return img.convert("RGB")
+
+
 def test_round_to_multiple_returns_multiple_of_8():
     assert round_to_multiple(618) == 624  # the exact crash case from the bug report
     assert round_to_multiple(800) == 800
@@ -103,7 +117,7 @@ def test_pipeline_passes_text_image_relationship_to_overlay(tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="green")
     img.save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.generate.return_value = _passing_image()
 
     # Force page_structure with no_text so overlay receives it
     pipeline = Pipeline(
@@ -133,7 +147,7 @@ def test_pipeline_run(mock_compile, tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="green")
     img.save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.generate.return_value = _passing_image()
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
@@ -153,7 +167,7 @@ def test_pipeline_run_caches_raw_illustrations(mock_compile, tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="green")
     img.save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.generate.return_value = _passing_image()
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
@@ -178,7 +192,7 @@ def test_pipeline_run_force_regenerates(mock_compile, tmp_path: Path):
     img = Image.new("RGB", (512, 512), color="green")
     img.save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="blue")
+    mock_gen.generate.return_value = _passing_image()
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
@@ -215,7 +229,7 @@ def make_sd_checked_image(color: str = "red"):
         w = int(kwargs.get("width", 512))
         h = int(kwargs.get("height", 512))
         StableDiffusionPipeline.check_inputs(None, prompt, h, w, 1)
-        return Image.new("RGB", (w, h), color=color)
+        return _passing_image(w, h)
 
     return _generate
 
@@ -244,7 +258,7 @@ def test_pipeline_generate_dims_divisible_by_8_for_odd_source_size(mock_compile,
         )
 
         StableDiffusionPipeline.check_inputs(None, prompt, h, w, 1)
-        return Image.new("RGB", (w, h), color="red")
+        return _passing_image(w, h)
 
     mock_gen = MagicMock()
     mock_gen.generate.side_effect = make_image
@@ -306,7 +320,7 @@ def test_pipeline_run_verifies_generated_pages(mock_compile, tmp_path: Path, cap
     img_path = tmp_path / "example.png"
     Image.new("RGB", (512, 512), color="purple").save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.generate.return_value = _passing_image()
     mock_compile.return_value = tmp_path / "output.pdf"
 
     pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
@@ -361,7 +375,7 @@ def test_pipeline_run_survives_consistency_guard_failure(mock_compile, tmp_path:
     img_path = tmp_path / "example.png"
     Image.new("RGB", (512, 512), color="purple").save(img_path)
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.generate.return_value = _passing_image()
     mock_compile.return_value = tmp_path / "output.pdf"
 
     with patch("pageloom.pipeline.ConsistencyGuard") as mock_guard_cls:
@@ -411,7 +425,7 @@ def test_pipeline_depends_only_on_image_provider_interface(tmp_path: Path):
             seed: int | None = None,
         ) -> Image.Image:
             self.calls.append({"prompt": prompt, "width": width, "height": height})
-            return Image.new("RGB", (width, height), color="green")
+            return _passing_image(width, height)
 
         def estimated_cost_usd(self, width: int, height: int) -> float:
             return 0.0
@@ -443,7 +457,7 @@ def test_pipeline_negotiates_provider_size_then_fits_to_slot(mock_compile, tmp_p
             seed: int | None = None,
         ) -> Image.Image:
             calls.append((width, height))
-            return Image.new("RGB", (width, height), color="red")
+            return _passing_image(width, height)
 
         def estimated_cost_usd(self, width: int, height: int) -> float:
             return 0.0
@@ -475,7 +489,7 @@ def test_pipeline_standard_path_generates_at_native_square_not_page_size(
     (618x800 -> rounded 624x800)."""
     mock_pipeline = MagicMock()
     mock_pipeline.to.return_value = mock_pipeline
-    mock_pipeline.return_value = MagicMock(images=[Image.new("RGB", (512, 512), color="red")])
+    mock_pipeline.return_value = MagicMock(images=[_passing_image(512, 512)])
     mock_from_pretrained.return_value = mock_pipeline
     mock_compile.return_value = tmp_path / "output.pdf"
 
@@ -515,7 +529,7 @@ def test_pipeline_multi_picture_pages_request_square_native_size(
     images, never the narrow sub-slots derived by dividing the page."""
     mock_pipeline = MagicMock()
     mock_pipeline.to.return_value = mock_pipeline
-    mock_pipeline.return_value = MagicMock(images=[Image.new("RGB", (1024, 1024), color="red")])
+    mock_pipeline.return_value = MagicMock(images=[_passing_image(1024, 1024)])
     mock_from_pretrained.return_value = mock_pipeline
     mock_compile.return_value = tmp_path / "output.pdf"
 
@@ -588,7 +602,7 @@ class _ReferenceSupportingProvider:
                 "references": references,
             }
         )
-        return Image.new("RGB", (width, height), color="red")
+        return _passing_image(width, height)
 
     def estimated_cost_usd(self, width: int, height: int) -> float:
         return 0.0
@@ -619,7 +633,7 @@ class _NoReferenceProvider:
                 "references": references,
             }
         )
-        return Image.new("RGB", (width, height), color="green")
+        return _passing_image(width, height)
 
     def estimated_cost_usd(self, width: int, height: int) -> float:
         return 0.0
@@ -700,7 +714,7 @@ def test_pipeline_prompt_uses_vision_style_description_instead_of_layout_label(
     Image.new("RGB", (512, 512), color="purple").save(img_path)
     mock_compile.return_value = tmp_path / "output.pdf"
     mock_gen = MagicMock()
-    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.generate.return_value = _passing_image()
     mock_gen.capabilities = ImageProviderCapabilities(max_reference_images=0)
 
     class _FakeVision:
