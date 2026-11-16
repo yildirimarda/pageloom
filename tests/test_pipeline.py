@@ -457,3 +457,122 @@ def test_pipeline_negotiates_provider_size_then_fits_to_slot(mock_compile, tmp_p
     # The compiled page is exactly the layout slot size.
     pages = mock_compile.call_args.args[0]
     assert pages[0].size == (616, 792)
+
+
+class _ReferenceSupportingProvider:
+    """Fake provider that accepts reference images and records every call."""
+
+    capabilities = ImageProviderCapabilities(max_reference_images=3)
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def generate(
+        self,
+        prompt: str,
+        width: int,
+        height: int,
+        references: list[str | Image.Image] | None = None,
+        negative_prompt: str | None = None,
+        seed: int | None = None,
+    ) -> Image.Image:
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "width": width,
+                "height": height,
+                "references": references,
+            }
+        )
+        return Image.new("RGB", (width, height), color="red")
+
+
+class _NoReferenceProvider:
+    """Fake provider without reference support: must keep the text path."""
+
+    capabilities = ImageProviderCapabilities(max_reference_images=0)
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def generate(
+        self,
+        prompt: str,
+        width: int,
+        height: int,
+        references: list[str | Image.Image] | None = None,
+        negative_prompt: str | None = None,
+        seed: int | None = None,
+    ) -> Image.Image:
+        self.calls.append(
+            {
+                "prompt": prompt,
+                "width": width,
+                "height": height,
+                "references": references,
+            }
+        )
+        return Image.new("RGB", (width, height), color="green")
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_sends_references_when_provider_supports_them(mock_compile, tmp_path: Path):
+    """Provider with max_reference_images > 0: page 1 is text-only, later pages
+    reference the example page and the first generated page with a
+    match-style instruction instead of the text-only style description."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    mock_compile.return_value = tmp_path / "output.pdf"
+    provider = _ReferenceSupportingProvider()
+
+    pipeline = Pipeline(example_image=str(img_path), generator=provider)
+    pipeline.run(
+        contents=["apple", "banana", "cherry"],
+        output_path=str(tmp_path / "output.pdf"),
+    )
+
+    assert len(provider.calls) == 3
+    first_call = provider.calls[0]
+    # Page 1: no references exist yet -> text-only path.
+    assert first_call["references"] is None
+    assert "style reference:" in first_call["prompt"]
+    assert "match the style of the reference images" not in first_call["prompt"]
+
+    # The first generated page is remembered for use as a reference.
+    assert pipeline._first_generated_page is not None
+    assert pipeline._first_generated_page.size == (512, 512)
+
+    # Pages 2+: references = [example page, first generated page],
+    # prompt instructs to match the reference style.
+    for call in provider.calls[1:]:
+        refs = call["references"]
+        assert refs is not None
+        assert len(refs) == 2
+        assert refs[0] is pipeline.extractor.image
+        assert refs[1] is pipeline._first_generated_page
+        assert "match the style of the reference images" in call["prompt"]
+        assert "style reference:" not in call["prompt"]
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_keeps_text_path_when_provider_lacks_reference_support(
+    mock_compile, tmp_path: Path
+):
+    """Provider with max_reference_images == 0: all pages stay on the text-only
+    path, no references are ever sent."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    mock_compile.return_value = tmp_path / "output.pdf"
+    provider = _NoReferenceProvider()
+
+    pipeline = Pipeline(example_image=str(img_path), generator=provider)
+    pipeline.run(
+        contents=["apple", "banana"],
+        output_path=str(tmp_path / "output.pdf"),
+    )
+
+    assert len(provider.calls) == 2
+    for call in provider.calls:
+        assert call["references"] is None
+        assert "match the style of the reference images" not in call["prompt"]
+        assert "style reference:" in call["prompt"]
