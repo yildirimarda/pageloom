@@ -23,6 +23,34 @@ def test_get_device_from_env(monkeypatch):
     assert settings.get_device() == "cpu"
 
 
+def test_get_cpu_slow_warn_threshold_seconds_default():
+    assert settings.get_cpu_slow_warn_threshold_seconds() == 300.0
+
+
+def test_get_cpu_slow_warn_threshold_seconds_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_CPU_SLOW_WARN_SECONDS", "60")
+    assert settings.get_cpu_slow_warn_threshold_seconds() == 60.0
+
+
+def test_get_cpu_slow_warn_threshold_seconds_invalid_env_falls_back(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_CPU_SLOW_WARN_SECONDS", "not-a-number")
+    assert settings.get_cpu_slow_warn_threshold_seconds() == 300.0
+
+
+def test_get_cpu_slow_warn_threshold_seconds_zero_disables(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_CPU_SLOW_WARN_SECONDS", "0")
+    assert settings.get_cpu_slow_warn_threshold_seconds() == 0.0
+
+
+def test_estimated_cpu_run_seconds():
+    # 20 pages x 25 steps x 2 s/step = 1000 s
+    assert settings.estimated_cpu_run_seconds(20, 25) == 1000.0
+    # images_per_page multiplies the estimate
+    assert settings.estimated_cpu_run_seconds(10, 25, images_per_page=3) == 1500.0
+    # fast profile: fewer steps
+    assert settings.estimated_cpu_run_seconds(1, 6) == 12.0
+
+
 def test_get_output_dir_default():
     assert settings.get_output_dir() is None
 

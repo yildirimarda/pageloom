@@ -27,6 +27,44 @@ def get_device() -> str | None:
     return os.environ.get("PAGELOOM_DEVICE") or None
 
 
+def get_cpu_slow_warn_threshold_seconds() -> float:
+    """Threshold (seconds) above which a CPU-based run warns the user.
+
+    The local Stable Diffusion backend is slow on CPU -- Docker on macOS
+    cannot use the MPS (Apple Silicon) backend, so a local run inside Docker
+    falls back to CPU and can take minutes per page. When a run is estimated
+    to take longer than this, a warning suggests plain ``uv run`` (which can
+    use MPS on Apple Silicon) or an online image provider. Set to ``0`` to
+    disable. Override with ``PAGELOOM_CPU_SLOW_WARN_SECONDS``.
+    """
+    raw = os.environ.get("PAGELOOM_CPU_SLOW_WARN_SECONDS")
+    if raw is None or raw.strip() == "":
+        return 300.0
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 300.0
+
+
+def estimated_cpu_run_seconds(
+    num_pages: int, num_inference_steps: int, images_per_page: int = 1
+) -> float:
+    """Heuristic wall-clock estimate for a CPU Stable Diffusion run (seconds).
+
+    Assumes roughly two seconds per inference step per 512 x 512 image on CPU,
+    deliberately conservative since real hardware varies. CUDA and MPS runs are
+    assumed fast enough that no warning is needed; callers check
+    ``device == "cpu"`` before using this.
+    """
+    seconds_per_image_per_step = 2.0
+    return (
+        max(0, int(num_pages))
+        * max(1, int(images_per_page))
+        * max(1, int(num_inference_steps))
+        * seconds_per_image_per_step
+    )
+
+
 def get_output_dir() -> str | None:
     return os.environ.get("PAGELOOM_OUTPUT_DIR") or None
 
