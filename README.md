@@ -137,6 +137,50 @@ These can be overridden per provider through the environment variables above or 
 
 If an LLM API call fails — for example due to a rate limit, timeout, invalid key, or truncated response — `LLMContentGenerator.generate()` raises a `RuntimeError` with a message identifying the provider and the specific failure type (rate limit, timeout, invalid/missing key, or insufficient content). The CLI catches these and prints an error to stderr (`Error: LLM content generation failed: ...`) rather than silently defaulting to the built-in content list.
 
+## Choosing an image model
+
+PageLoom can generate artwork locally (Stable Diffusion via Hugging Face `diffusers`, free and offline) or through one of several online image-generation providers. Select the provider with `PAGELOOM_IMAGE_PROVIDER` (default `local`) and the model with `PAGELOOM_IMAGE_MODEL` (default: the provider's own default), or with the CLI flags `--image-provider` and `--image-model`.
+
+| Provider | Credential | Default model | Reference images | Est. cost / image |
+|---|---|---|---|---|
+| `local` | none | `runwayml/stable-diffusion-v1-5` | no | $0.00 (own hardware) |
+| `openai` | `OPENAI_API_KEY` | `gpt-image-2` | yes (1) | $0.040 (gpt-image-2), $0.080 (dall-e-3) |
+| `gemini` | `GEMINI_API_KEY` | `gemini-nano-banana-2.1` | yes (1) | $0.030 (nano-banana-2.1) |
+| `openrouter` | `OPENROUTER_API_KEY` | `openrouter/auto` | no (text-to-image only) | $0.00 (free router), ~$0.050 (paid) |
+| `flux` | `BFL_API_KEY` / `FAL_KEY` / `REPLICATE_API_KEY` | `flux-pro-1.1` | yes (up to 3) | $0.055 (flux-pro-1.1) |
+
+Costs are estimates from the configurable price table (`PAGELOOM_IMAGE_PRICE_TABLE`, a JSON object or a path to a JSON file); unknown models fall back to the entry's `default`, then to `$0.00`. Local generation is always free. `Pipeline` sums per-image estimates and `--max-cost USD` stops a run before the budget is exceeded; `--estimate` prints the expected cost without calling any provider.
+
+### Why the model IDs are settings
+
+Model names move fast — OpenRouter retires free models, Google and OpenAI ship new image models, and Black Forest Labs versions FLUX regularly. Every model ID is therefore configuration read from settings/env (`OPENAI_IMAGE_MODEL`, `GEMINI_IMAGE_MODEL`, `OPENROUTER_IMAGE_MODEL`, `PAGELOOM_FLUX_MODEL`, `PAGELOOM_MODEL_ID`), never hardcoded beyond a settings value. OpenRouter's defaults (`openrouter/free` for vision, `openrouter/auto` for images) are auto-routers that pick a current model supporting the requested capability, so you don't depend on a specific ID that might get retired. Verify any model ID you pin against the provider's current docs before relying on it.
+
+### Provider details
+
+#### `local` — Stable Diffusion (free, offline, no references)
+
+Runs Stable Diffusion locally via Hugging Face `diffusers` on your own hardware (CPU, CUDA, or MPS). No API key and no per-image fee. It does **not** accept reference images — the example page's style reaches it only through the text prompt built from the extracted style. Configure the checkpoint with `PAGELOOM_MODEL_ID` (default `runwayml/stable-diffusion-v1-5`) and the device with `PAGELOOM_DEVICE`. Model weights download from Hugging Face on first run; see "Model and Dependency Setup" for caching (`HF_HOME`). Look up alternative checkpoints on the [Hugging Face model hub](https://huggingface.co/models).
+
+#### `openai` — OpenAI Images API (gpt-image-2 / dall-e-3)
+
+Uses OpenAI's `images.generate` for text-to-image and `images.edit` when a reference (the example page) is supplied, so one reference image conditions the artwork. Set `OPENAI_API_KEY`; the model id comes from `OPENAI_IMAGE_MODEL` (default `gpt-image-2`). Native size is 1024 x 1024; other requested sizes are negotiated to the nearest supported size and cropped or padded back to the layout slot. Estimated cost: $0.040/gpt-image-2, $0.080/dall-e-3 per image. See [OpenAI's images API docs](https://platform.openai.com/docs/guides/images) for current models and pricing.
+
+#### `gemini` — Google Gemini Nano Banana
+
+Calls Google's `google.genai` `models.generate_content` with the prompt plus any reference images as image parts, so one reference image (the example page) conditions the output. Set `GEMINI_API_KEY`; the model id comes from `GEMINI_IMAGE_MODEL` (default `gemini-nano-banana-2.1`). Native size is 1024 x 1024. Estimated cost: $0.030 per image (nano-banana-2.1). See the [Google AI docs](https://ai.google.dev/) for the current Nano Banana family and pricing.
+
+#### `openrouter` — OpenRouter image models (auto-router default)
+
+Sends a chat completion with `modalities: ["image"]` so the selected model returns an image. Reference images are accepted for interface conformance but **not forwarded** — this path is text-to-image only. Set `OPENROUTER_API_KEY`; the model id comes from `OPENROUTER_IMAGE_MODEL` (default `openrouter/auto`, OpenRouter's auto-router that picks a current image-output model at no fixed cost). The free router `openrouter/free` costs $0.00 but its roster changes over time. Estimated cost: $0.00 (free router), ~$0.050 (paid models). To pick a current image-output model, browse [https://openrouter.ai/models](https://openrouter.ai/models) and filter by image output, or call `pageloom.providers.openrouter.list_openrouter_image_models()` (needs an `OPENROUTER_API_KEY`).
+
+#### `flux` — Black Forest Labs FLUX.2 (BFL / fal / Replicate)
+
+Reachable through Black Forest Labs' own API (`api.bfl.ai`, default) or, via `PAGELOOM_FLUX_HOST`, through fal.ai (`fal`) or Replicate (`replicate`). Each host uses its own request shape and credential env var: `BFL_API_KEY` (bfl), `FAL_KEY` (fal), `REPLICATE_API_KEY` (replicate). Supports up to 3 reference images (multi-reference input) for style conditioning. Model id from `PAGELOOM_FLUX_MODEL` (default `flux-pro-1.1`); host from `PAGELOOM_FLUX_HOST` (default `bfl`). Native size 1024 x 1024 plus aspect ratios 1:1, 16:9, 9:16, 3:2, 2:3. Estimated cost: $0.055 per image (flux-pro-1.1). See the [BFL docs](https://api.bfl.ai/), [fal docs](https://fal.ai/), or [Replicate docs](https://replicate.com/) for current models and pricing.
+
+### Reference images and style consistency
+
+When the selected provider accepts reference images (`openai`, `gemini`, `flux`), `Pipeline` sends the example page and the first accepted generated page as references with a style-matching instruction (page 1 always starts text-only since no reference exists yet; from page 2 onward references are used). Providers without usable reference support (`local`, `openrouter`) keep the text-only style path. Each provider's limit is documented in `capabilities.max_reference_images`.
+
 ## Automatic Visual Page-Structure Analysis (Free by Default)
 
 By default — when you don't pass `--description` or `--no-vision` — PageLoom sends the example page image itself to a vision-capable (multimodal) LLM and asks it to describe the page's structure: what type of page it is, how many illustrated elements it has, how they're arranged, and what the text/image relationship looks like. This means PageLoom can recognize **any** page type — numbers, digits, word-image matching grids, shapes, colors, or anything else — without you writing a description, and without being limited to a fixed list of hardcoded categories.
