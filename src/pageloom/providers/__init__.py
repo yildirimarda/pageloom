@@ -49,13 +49,17 @@ def build_image_provider(
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    image_strength: float | None = None,
 ) -> ImageProvider:
     """Build the image provider selected by settings or an explicit argument.
 
     ``provider`` defaults to :func:`pageloom.settings.get_image_provider`
     (``local`` unless ``PAGELOOM_IMAGE_PROVIDER`` is set). ``model`` defaults
     to :func:`pageloom.settings.get_image_model` (``None`` lets the provider
-    pick its own default).
+    pick its own default). ``image_strength`` defaults to
+    :func:`pageloom.settings.get_image_strength` (``0.0`` = off) and is only
+    honored by the ``local`` provider, which uses it for image-to-image
+    conditioning on the example page.
 
     Raises :class:`RuntimeError` naming the missing credential variable when a
     credential-requiring provider is selected without its key and no
@@ -77,7 +81,13 @@ def build_image_provider(
                 f"or pass api_key explicitly."
             )
 
-    return provider_cls(model_id=model, verify_license=False)
+    kwargs = {"model_id": model, "verify_license": False}
+    if provider_name == "local":
+        # Only the local Stable Diffusion provider accepts image_strength.
+        kwargs["image_strength"] = (
+            settings.get_image_strength() if image_strength is None else image_strength
+        )
+    return provider_cls(**kwargs)
 
 
 __all__ = [

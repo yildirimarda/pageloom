@@ -158,7 +158,9 @@ def test_local_diffusers_provider_is_an_image_provider(mock_mps, mock_cuda, mock
 
     provider = LocalDiffusersProvider(verify_license=False)
     assert isinstance(provider, ImageProvider)
-    assert provider.capabilities.max_reference_images == 0
+    # The local provider accepts one reference image (the example page) for
+    # image-to-image conditioning when image_strength > 0 (off by default).
+    assert provider.capabilities.max_reference_images == 1
     assert provider.capabilities.supports_negative_prompt is True
     assert provider.capabilities.supports_edit is False
 

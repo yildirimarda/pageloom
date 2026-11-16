@@ -10,7 +10,11 @@ from __future__ import annotations
 import sys
 
 import torch
-from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
+from diffusers import (
+    DPMSolverMultistepScheduler,
+    StableDiffusionImg2ImgPipeline,
+    StableDiffusionPipeline,
+)
 from PIL import Image
 
 from pageloom import settings
@@ -77,12 +81,17 @@ class LocalDiffusersProvider:
         torch_dtype: torch.dtype | None = None,
         verify_license: bool = True,
         license_context: str = "book intended for sale",
+        image_strength: float | None = None,
     ) -> None:
         self.model_id = model_id if model_id is not None else settings.get_model_id()
         self.native_size = _native_generation_size(self.model_id)
+        # The local provider can take one reference image (the example page)
+        # for image-to-image conditioning; whether it actually does so is
+        # controlled by ``image_strength`` (off by default).
         self.capabilities = ImageProviderCapabilities(
             supported_sizes=((self.native_size, self.native_size),),
             supports_negative_prompt=True,
+            max_reference_images=1,
         )
         self.verify_license = verify_license
         self.license_context = license_context
@@ -107,6 +116,12 @@ class LocalDiffusersProvider:
             self.torch_dtype = torch.float32
         self.num_inference_steps = settings.get_num_inference_steps()
         self.guidance_scale = settings.get_guidance_scale()
+        # Image-to-image strength: 0.0 (default) means plain text-to-image,
+        # the example page is never used as a reference. Any value in
+        # (0, 1] enables image-to-image conditioning on the example page.
+        self.image_strength = (
+            settings.get_image_strength() if image_strength is None else image_strength
+        )
         if verify_license:
             verifier = LicenseVerifier(model_id=self.model_id)
             verifier.verify(
@@ -114,14 +129,14 @@ class LocalDiffusersProvider:
                 context=license_context,
             )
         cache_dir = settings.get_hf_cache_dir()
+        load_kwargs = {
+            "torch_dtype": self.torch_dtype,
+            "cache_dir": cache_dir,
+            "safety_checker": None,
+            "feature_extractor": None,
+        }
         try:
-            self.pipeline = StableDiffusionPipeline.from_pretrained(
-                self.model_id,
-                torch_dtype=self.torch_dtype,
-                cache_dir=cache_dir,
-                safety_checker=None,
-                feature_extractor=None,
-            )
+            self.pipeline = self._load_pipeline(StableDiffusionPipeline, **load_kwargs)
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to download/load Stable Diffusion model '{self.model_id}'. "
@@ -130,35 +145,64 @@ class LocalDiffusersProvider:
                 f"Underlying error: {exc}"
             ) from exc
         self.pipeline = self.pipeline.to(self.device)
-        # Attention slicing enabled consistently for lower memory usage
-        self.pipeline.enable_attention_slicing()
-        # Production scheduler: DPM++ multistep (DPMSolverMultistepScheduler)
-        # gives good image quality at the 25-30 production inference steps.
-        # Only swap in a real scheduler when the pipeline exposed a config dict
-        # (a mocked pipeline in tests has a MagicMock config, which from_config
-        # would otherwise mistake for a model path and try to download).
-        scheduler_config = getattr(self.pipeline.scheduler, "config", None)
-        if isinstance(scheduler_config, dict):
-            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(scheduler_config)
-        # SD1.5's bundled safety checker false-positives on benign children's-book
-        # subjects (e.g. "banana", "cherry", "apple") and blacks out the whole
-        # image, silently destroying the illustration we were asked to draw --
-        # verified live (2026-10 audit: a "red apple on a white background" prompt
-        # returned 100% black pixels). PageLoom only ever generates family-friendly
-        # content (letters, numbers, fruit, animals), so disable the safety filter
-        # to keep generated pages visually sensible. Loaded via
-        # ``safety_checker=None``/``feature_extractor=None`` at from_pretrained
-        # time (diffusers >= 0.40 leaves the unused checker module resident if
-        # cleared only after load); the late assignment remains as a belt-and-
-        # braces fallback for pipelines built by overridden/older loaders.
-        self.pipeline.safety_checker = None
-        if getattr(self.pipeline, "feature_extractor", None) is not None:
-            self.pipeline.feature_extractor = None
+        self._finalize_pipeline(self.pipeline)
+        # The image-to-image pipeline is only loaded when reference
+        # conditioning is enabled (strength > 0); otherwise it stays None and
+        # generate() always uses the text-to-image pipeline above.
+        self.img2img_pipeline: StableDiffusionImg2ImgPipeline | None = None
+        if self.image_strength > 0:
+            try:
+                self.img2img_pipeline = self._load_pipeline(
+                    StableDiffusionImg2ImgPipeline, **load_kwargs
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to download/load Stable Diffusion image-to-image "
+                    f"model '{self.model_id}'. "
+                    f"Underlying error: {exc}"
+                ) from exc
+            self.img2img_pipeline = self.img2img_pipeline.to(self.device)
+            self._finalize_pipeline(self.img2img_pipeline)
         # Belt and braces: disabling the checker above is the primary fix, but
         # generate() also black-frame-detects and retries (with a fresh seed)
         # in case a caller re-enables the checker or a future model ships a
         # different blackout path -- a black frame is never a valid result.
         self.safety_max_retries = _safety_max_retries()
+
+    def _load_pipeline(self, pipeline_cls, **kwargs):
+        """Load a Stable Diffusion pipeline (txt2img or img2img) from pretrained.
+
+        Wraps ``from_pretrained`` so the same kwargs (dtype, cache dir, disabled
+        safety checker) apply to both pipeline families.
+        """
+        return pipeline_cls.from_pretrained(self.model_id, **kwargs)
+
+    def _finalize_pipeline(self, pipeline) -> None:
+        """Apply the production configuration common to both pipeline families.
+
+        Attention slicing for memory, the DPM++ multistep scheduler for quality
+        at production step counts, and the disabled safety checker. Mirrors the
+        previous post-load setup, factored out so both ``self.pipeline`` and
+        ``self.img2img_pipeline`` get it.
+        """
+        # Attention slicing enabled consistently for lower memory usage.
+        pipeline.enable_attention_slicing()
+        # Production scheduler: DPM++ multistep (DPMSolverMultistepScheduler)
+        # gives good image quality at the 25-30 production inference steps.
+        # Only swap in a real scheduler when the pipeline exposed a config dict
+        # (a mocked pipeline in tests has a MagicMock config, which from_config
+        # would otherwise mistake for a model path and try to download).
+        scheduler_config = getattr(pipeline.scheduler, "config", None)
+        if isinstance(scheduler_config, dict):
+            pipeline.scheduler = DPMSolverMultistepScheduler.from_config(scheduler_config)
+        # SD1.5's bundled safety checker false-positives on benign
+        # children's-book subjects (e.g. "banana", "cherry", "apple") and
+        # blacks out the whole image. Disabled at load time via
+        # ``safety_checker=None``/``feature_extractor=None``; the late
+        # assignment below remains as a belt-and-braces fallback.
+        pipeline.safety_checker = None
+        if getattr(pipeline, "feature_extractor", None) is not None:
+            pipeline.feature_extractor = None
 
     def estimated_cost_usd(self, width: int, height: int) -> float:
         """Local Stable Diffusion runs on the user's own hardware: no per-image fee."""
@@ -188,15 +232,16 @@ class LocalDiffusersProvider:
     ) -> Image.Image:
         """Generate one illustration for ``prompt``.
 
-        ``references`` is accepted for :class:`~pageloom.providers.base.ImageProvider`
-        conformance but unused here (this provider can't take reference images;
-        see ``capabilities.max_reference_images``).
+        When ``image_strength`` is greater than 0 (off by default) and at least
+        one reference is supplied, the example page (``references[0]``) is used
+        as the reference for image-to-image generation with
+        ``strength=self.image_strength``; otherwise plain text-to-image is used
+        and ``references`` is ignored.
 
         ``num_inference_steps`` and ``guidance_scale`` fall back to the
         production defaults stored on the instance (25 steps, ~7 guidance) when
         not supplied explicitly.
         """
-        del references  # this provider does not support reference images
         if num_inference_steps is None:
             num_inference_steps = self.num_inference_steps
         if guidance_scale is None:
@@ -218,16 +263,35 @@ class LocalDiffusersProvider:
             generator = None
             if attempt_seed is not None:
                 generator = torch.Generator(device=self.device).manual_seed(attempt_seed)
+            use_img2img = (
+                self.image_strength > 0 and self.img2img_pipeline is not None and references
+            )
+            pipeline = self.img2img_pipeline if use_img2img else self.pipeline
             try:
-                result = self.pipeline(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    width=width,
-                    height=height,
-                    num_inference_steps=num_inference_steps,
-                    guidance_scale=guidance_scale,
-                    generator=generator,
-                )
+                if use_img2img:
+                    # Image-to-image: the example page is the reference and
+                    # ``strength`` controls how closely the output follows it.
+                    result = pipeline(
+                        prompt=prompt,
+                        image=references[0],
+                        strength=self.image_strength,
+                        negative_prompt=negative_prompt,
+                        width=width,
+                        height=height,
+                        num_inference_steps=num_inference_steps,
+                        guidance_scale=guidance_scale,
+                        generator=generator,
+                    )
+                else:
+                    result = pipeline(
+                        prompt=prompt,
+                        negative_prompt=negative_prompt,
+                        width=width,
+                        height=height,
+                        num_inference_steps=num_inference_steps,
+                        guidance_scale=guidance_scale,
+                        generator=generator,
+                    )
             except ValueError as exc:
                 message = str(exc)
                 if (
