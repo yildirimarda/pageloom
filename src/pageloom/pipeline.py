@@ -14,7 +14,7 @@ from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
 from pageloom.providers import ImageProvider, ImageProviderCapabilities, build_image_provider
-from pageloom.providers.size_negotiation import generate_fitting_slot
+from pageloom.providers.size_negotiation import generate_fitting_slot, negotiate_size
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
 
@@ -49,6 +49,7 @@ class Pipeline:
         page_structure: dict | None = None,
         vision_analyzer: object | None = None,
         verify_consistency: bool = True,
+        max_cost_usd: float | None = None,
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
@@ -87,9 +88,43 @@ class Pipeline:
         )
         # One result dict per page from the most recent run() (see _verify_page).
         self.consistency_results: list[dict] = []
+        # Cost awareness: per-image estimated cost from the configurable price
+        # table, summed across the run. ``max_cost_usd`` caps total spend.
+        self.max_cost_usd = max_cost_usd
+        self.total_cost_usd = 0.0
+        self.budget_stopped = False
         # The first accepted generated page becomes a style reference for
         # subsequent pages when the provider supports reference images.
         self._first_generated_page: Image.Image | None = None
+
+    def _image_cost_usd(self, width: int, height: int) -> float:
+        """Estimated USD cost for one image at the provider-negotiated size."""
+        capabilities = getattr(self.generator, "capabilities", None)
+        gen_width, gen_height = negotiate_size(int(width), int(height), capabilities)
+        return self.generator.estimated_cost_usd(gen_width, gen_height)
+
+    def estimated_total_cost_usd(self, num_pages: int) -> float:
+        """Expected USD cost for generating ``num_pages`` pages, without calling
+        the provider.
+
+        Reads the per-image price from the configurable price table and scales
+        by the number of images each page requires (``multiple_labels`` pages
+        generate one sub-image per element). Cached images are not discounted:
+        this is a fresh-run estimate.
+        """
+        structure = self.page_structure or {}
+        text_rel = structure.get("text_image_relationship")
+        images_per_page = 1
+        if text_rel == "multiple_labels":
+            images_per_page = max(1, int(structure.get("element_count", 1)))
+        width = round_to_multiple(
+            self.style.get("composition", {}).get("page_dimensions", {}).get("width", 612)
+        )
+        height = round_to_multiple(
+            self.style.get("composition", {}).get("page_dimensions", {}).get("height", 612)
+        )
+        per_image = self.generator.estimated_cost_usd(width, height)
+        return num_pages * images_per_page * per_image
 
     def run(
         self,
@@ -181,7 +216,17 @@ class Pipeline:
                         sub_h = max(150, int(height) // 2)
 
                     # Generate sub-image at a provider-native size, then fit it
-                    # back to the sub-slot (skip individual sub-caching).
+                    # back to the sub-slot (skip individual sub-caching). Stop before
+                    # the provider call if this sub-image would exceed the budget.
+                    sub_image_cost = self._image_cost_usd(
+                        round_to_multiple(sub_w), round_to_multiple(sub_h)
+                    )
+                    if (
+                        self.max_cost_usd is not None
+                        and self.total_cost_usd + sub_image_cost > self.max_cost_usd
+                    ):
+                        self.budget_stopped = True
+                        break
                     sub_image = generate_fitting_slot(
                         self.generator,
                         prompt=sub_prompt,
@@ -189,6 +234,10 @@ class Pipeline:
                         height=round_to_multiple(sub_h),
                     )
                     sub_images.append(sub_image)
+                    self.total_cost_usd += sub_image_cost
+
+                if self.budget_stopped:
+                    break
 
                 # Composite sub-images onto a single full-size canvas.
                 # Pictures are confined to the upper ~70% so the bottom text band
@@ -278,7 +327,15 @@ class Pipeline:
                 image = Image.open(str(cache_path))
             else:
                 # Negotiate a provider-native size, generate, then crop/pad
-                # back to the layout slot (size negotiation).
+                # back to the layout slot (size negotiation). Stop before the
+                # provider call if this image would exceed the max-cost budget.
+                image_cost = self._image_cost_usd(int(width), int(height))
+                if (
+                    self.max_cost_usd is not None
+                    and self.total_cost_usd + image_cost > self.max_cost_usd
+                ):
+                    self.budget_stopped = True
+                    break
                 image = generate_fitting_slot(
                     self.generator,
                     prompt=prompt,
@@ -287,6 +344,7 @@ class Pipeline:
                     references=references,
                 )
                 image.save(str(cache_path), "PNG")
+                self.total_cost_usd += image_cost
 
             # Remember the first generated page so later pages can reference it
             # for style consistency (page 1 is always generated text-only since
@@ -305,6 +363,14 @@ class Pipeline:
                 arrangement=structure.get("arrangement"),
             )
             pages.append(overlaid)
+
+        if self.budget_stopped and self.max_cost_usd is not None:
+            print(
+                f"Warning: max cost ${self.max_cost_usd:.2f} reached; stopped "
+                f"generation before exceeding the budget "
+                f"(${self.total_cost_usd:.2f} of ${self.max_cost_usd:.2f} used).",
+                file=sys.stderr,
+            )
 
         # Verify every finished page against the example before compiling.
         # Opting out skips both the guard calls (avoiding the extra vision

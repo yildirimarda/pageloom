@@ -62,6 +62,9 @@ class FakeProvider:
         )
         return Image.new("RGB", (width, height), color="blue")
 
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        return 0.0
+
 
 def test_capabilities_record_defaults():
     caps = ImageProviderCapabilities()
@@ -279,6 +282,9 @@ class _FixedSizeProvider:
     ) -> Image.Image:
         self.calls.append((width, height))
         return Image.new("RGB", self.size, color="red")
+
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        return 0.0
 
 
 # -- negotiate_size: capability profiles with square, tall and wide targets --

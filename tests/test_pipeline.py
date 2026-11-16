@@ -413,6 +413,9 @@ def test_pipeline_depends_only_on_image_provider_interface(tmp_path: Path):
             self.calls.append({"prompt": prompt, "width": width, "height": height})
             return Image.new("RGB", (width, height), color="green")
 
+        def estimated_cost_usd(self, width: int, height: int) -> float:
+            return 0.0
+
     assert isinstance(StubProvider(), ImageProvider)
     provider = StubProvider()
     pipeline = Pipeline(example_image=str(img_path), generator=provider)
@@ -441,6 +444,9 @@ def test_pipeline_negotiates_provider_size_then_fits_to_slot(mock_compile, tmp_p
         ) -> Image.Image:
             calls.append((width, height))
             return Image.new("RGB", (width, height), color="red")
+
+        def estimated_cost_usd(self, width: int, height: int) -> float:
+            return 0.0
 
     # 612 is not a multiple of 8: the page slot rounds up to 616x792.
     img_path = tmp_path / "example.png"
@@ -486,6 +492,9 @@ class _ReferenceSupportingProvider:
         )
         return Image.new("RGB", (width, height), color="red")
 
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        return 0.0
+
 
 class _NoReferenceProvider:
     """Fake provider without reference support: must keep the text path."""
@@ -513,6 +522,9 @@ class _NoReferenceProvider:
             }
         )
         return Image.new("RGB", (width, height), color="green")
+
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        return 0.0
 
 
 @patch("pageloom.pipeline.PDFCompiler.compile")

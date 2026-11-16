@@ -126,6 +126,10 @@ class OpenRouterImageProvider:
             return Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
         raise RuntimeError("OpenRouter image response contained no image data")
 
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        """Estimated USD cost for one generated image from the price table."""
+        return settings.image_price_usd("openrouter", self.model_id)
+
 
 def list_openrouter_image_models(api_key: str | None = None) -> list[str]:
     """Return OpenRouter model ids that support image output.

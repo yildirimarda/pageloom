@@ -53,6 +53,8 @@ class LocalDiffusersProvider:
     Diffusion via Hugging Face ``diffusers``.
     """
 
+    provider_name = "local"
+
     capabilities = ImageProviderCapabilities(supports_negative_prompt=True)
 
     def __init__(
@@ -119,6 +121,10 @@ class LocalDiffusersProvider:
         # in case a caller re-enables the checker or a future model ships a
         # different blackout path -- a black frame is never a valid result.
         self.safety_max_retries = _safety_max_retries()
+
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        """Local Stable Diffusion runs on the user's own hardware: no per-image fee."""
+        return 0.0
 
     @staticmethod
     def _round_to_multiple_8(dim: int) -> int:

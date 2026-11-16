@@ -170,6 +170,25 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Image model id (default: provider default, from PAGELOOM_IMAGE_MODEL).",
     )
+    generate_parser.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        help=(
+            "Maximum estimated total cost in USD for the run. Generation stops "
+            "before this budget is exceeded (cached images are free)."
+        ),
+    )
+    generate_parser.add_argument(
+        "--estimate",
+        action="store_true",
+        default=False,
+        help=(
+            "Print the expected cost for the run without calling any image "
+            "provider, then exit. Uses the configurable price table "
+            "(PAGELOOM_IMAGE_PRICE_TABLE) and the detected page structure."
+        ),
+    )
 
     check_vision_parser = subparsers.add_parser(
         "check-vision",
@@ -274,6 +293,22 @@ def main(argv: list[str] | None = None) -> int:
             "text_image_relationship": "label_per_image",
         }
 
+    # --estimate: print the expected cost for the run without calling any image
+    # provider, then exit. The price table (PAGELOOM_IMAGE_PRICE_TABLE) and the
+    # detected page structure determine the per-image cost.
+    if args.estimate:
+        estimate_pipeline = Pipeline(
+            example_image=args.example,
+            description=args.description,
+            provider=args.image_provider,
+            model=args.image_model,
+            page_structure=page_structure,
+            verify_consistency=False,
+        )
+        estimate = estimate_pipeline.estimated_total_cost_usd(pages_value)
+        print(f"Estimated cost: ${estimate:.2f} for {pages_value} page(s)")
+        return 0
+
     # Determine available content based on detected page structure.
     # Only alphabet-style pages have a fixed built-in content list.
     content_pattern = page_structure.get("content_pattern", "single_letter_word_illustration")
@@ -323,6 +358,8 @@ def main(argv: list[str] | None = None) -> int:
         # --no-consistency opts out of that check entirely (no guard runs and
         # no `Consistency check:` report).
         verify_consistency=not args.no_consistency,
+        # --max-cost caps total estimated spend; the run stops before exceeding it.
+        max_cost_usd=args.max_cost,
     )
     result = pipeline.run(
         contents=contents,
