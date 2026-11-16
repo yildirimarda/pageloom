@@ -6,12 +6,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
+from pageloom import settings
 from pageloom.providers import (
     IMAGE_PROVIDER_CREDENTIAL_ENV_VARS,
     IMAGE_PROVIDER_MAP,
     ImageProvider,
     ImageProviderCapabilities,
     LocalDiffusersProvider,
+    OpenAIImageProvider,
     build_image_provider,
 )
 from pageloom.providers.size_negotiation import (
@@ -388,3 +390,108 @@ def test_generate_fitting_slot_with_aspect_ratios_only():
     # Largest 16:9 size fitting in 480x480 is 480x270, then padded to square.
     assert provider.calls[0] == (480, 270)
     assert image.getpixel((0, 0)) == (255, 255, 255)  # top/bottom padding
+
+
+# -- OpenAI image provider --
+
+_VALID_B64_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9Q"
+    "DwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+@contextmanager
+def _mock_openai_images(b64_json=_VALID_B64_PNG):
+    """Patch sys.modules['openai'] with a fake client for image generation."""
+    import sys
+
+    mock_module = MagicMock()
+    mock_client = MagicMock()
+    mock_data = MagicMock()
+    mock_data.b64_json = b64_json
+    mock_response = MagicMock(data=[mock_data])
+    mock_client.images.generate.return_value = mock_response
+    mock_client.images.edit.return_value = mock_response
+    mock_module.OpenAI.return_value = mock_client
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_module
+    try:
+        yield mock_client
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_openai_image_provider_is_an_image_provider():
+    provider = OpenAIImageProvider()
+    assert isinstance(provider, ImageProvider)
+    assert provider.capabilities.max_reference_images == 1
+    assert provider.capabilities.supports_edit is True
+    assert provider.capabilities.supported_sizes == ((1024, 1024),)
+
+
+def test_openai_image_provider_model_id_read_from_settings(monkeypatch):
+    monkeypatch.setenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
+    provider = OpenAIImageProvider()
+    assert provider.model_id == "gpt-image-1"
+
+
+def test_openai_image_provider_model_id_defaults_to_settings_default(monkeypatch):
+    monkeypatch.delenv("OPENAI_IMAGE_MODEL", raising=False)
+    provider = OpenAIImageProvider()
+    assert provider.model_id == settings.get_openai_image_model()
+
+
+def test_openai_image_provider_generate_calls_images_generate(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    with _mock_openai_images() as mock_client:
+        provider = OpenAIImageProvider(api_key="test-key")
+        image = provider.generate("a red apple", width=1024, height=1024)
+        assert isinstance(image, Image.Image)
+        call_kwargs = mock_client.images.generate.call_args.kwargs
+        assert call_kwargs["model"] == settings.get_openai_image_model()
+        assert call_kwargs["prompt"] == "a red apple"
+        assert call_kwargs["n"] == 1
+        assert call_kwargs["size"] == "1024x1024"
+        mock_client.images.edit.assert_not_called()
+
+
+def test_openai_image_provider_generate_with_reference_calls_images_edit(
+    monkeypatch,
+):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    with _mock_openai_images() as mock_client:
+        provider = OpenAIImageProvider(api_key="test-key")
+        ref = Image.new("RGB", (1024, 1024), color="red")
+        image = provider.generate(
+            "make it match the example", width=1024, height=1024, references=[ref]
+        )
+        assert isinstance(image, Image.Image)
+        call_kwargs = mock_client.images.edit.call_args.kwargs
+        assert call_kwargs["model"] == settings.get_openai_image_model()
+        assert call_kwargs["prompt"] == "make it match the example"
+        assert call_kwargs["n"] == 1
+        assert call_kwargs["size"] == "1024x1024"
+        assert call_kwargs["image"] is not None
+        mock_client.images.generate.assert_not_called()
+
+
+def test_openai_image_provider_generate_with_reference_file_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    ref_path = tmp_path / "ref.png"
+    Image.new("RGB", (1024, 1024), color="green").save(ref_path)
+    with _mock_openai_images() as mock_client:
+        provider = OpenAIImageProvider(api_key="test-key")
+        image = provider.generate("match this", width=1024, height=1024, references=[str(ref_path)])
+        assert isinstance(image, Image.Image)
+        call_kwargs = mock_client.images.edit.call_args.kwargs
+        assert call_kwargs["image"] == str(ref_path)
+
+
+def test_openai_image_provider_missing_credential_raises_clear_error(monkeypatch):
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(RuntimeError, match="OPENAI_API_KEY"),
+    ):
+        build_image_provider(provider="openai")
