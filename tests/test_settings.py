@@ -240,3 +240,49 @@ def test_get_guidance_scale_from_env(monkeypatch):
 def test_get_guidance_scale_invalid_env_falls_back(monkeypatch):
     monkeypatch.setenv("PAGELOOM_SD_GUIDANCE_SCALE", "not-a-number")
     assert settings.get_guidance_scale() == 7.5
+
+
+def test_get_profile_default():
+    assert settings.get_profile() == "quality"
+
+
+def test_get_profile_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
+    assert settings.get_profile() == "fast"
+
+
+def test_get_profile_invalid_falls_back_to_quality(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "not-a-profile")
+    assert settings.get_profile() == "not-a-profile"
+
+
+def test_get_num_inference_steps_fast_profile(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
+    assert settings.get_num_inference_steps() == 6
+
+
+def test_get_num_inference_steps_quality_profile(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "quality")
+    assert settings.get_num_inference_steps() == 25
+
+
+def test_get_num_inference_steps_env_overrides_profile(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
+    monkeypatch.setenv("PAGELOOM_SD_STEPS", "30")
+    assert settings.get_num_inference_steps() == 30
+
+
+def test_get_guidance_scale_fast_profile(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
+    assert settings.get_guidance_scale() == 5.0
+
+
+def test_get_guidance_scale_quality_profile(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "quality")
+    assert settings.get_guidance_scale() == 7.5
+
+
+def test_get_guidance_scale_env_overrides_profile(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
+    monkeypatch.setenv("PAGELOOM_SD_GUIDANCE_SCALE", "9")
+    assert settings.get_guidance_scale() == 9.0
