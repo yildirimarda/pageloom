@@ -121,7 +121,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
 
 ## Milestone 10: Make the local Stable Diffusion path produce usable images
 <!-- goal: the local model produces usable images with production settings; why: docs/IMAGE-BACKENDS.md -->
-- [ ] Add a generation size policy per model family: SD 1.5 at 512 x 512, SDXL-class models at 1024 x 1024, always square and at the native size, then fit the result into the layout slot; never generate at page size or at narrow aspect ratios; test that multi-picture pages request square images
+- [x] Add a generation size policy per model family: SD 1.5 at 512 x 512, SDXL-class models at 1024 x 1024, always square and at the native size, then fit the result into the layout slot; never generate at page size or at narrow aspect ratios; test that multi-picture pages request square images
   - evidence for why: docs/IMAGE-BACKENDS.md
 - [ ] Set production defaults that can produce a real image: 25 to 30 steps, a DPM++ multistep scheduler, float16 on CUDA and MPS, guidance around 7, and a `--quick` flag that is clearly labelled low quality and never used for verification; the real-run scripts must use the production defaults and record steps and size in their reports
 - [ ] Make the default model a setting with a maintained model id and a `--profile fast|quality` choice, document which checkpoints were tried, and fail with a clear message when the configured model id cannot be downloaded
