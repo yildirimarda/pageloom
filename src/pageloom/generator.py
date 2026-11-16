@@ -9,7 +9,9 @@ and tests keep working.
 from __future__ import annotations
 
 import torch  # noqa: F401 -- re-exported so tests can patch pageloom.generator.torch.cuda.is_available
-from diffusers import StableDiffusionPipeline  # noqa: F401 -- re-exported so tests can patch pageloom.generator.StableDiffusionPipeline.from_pretrained
+from diffusers import (
+    StableDiffusionPipeline,  # noqa: F401 -- re-exported so tests can patch pageloom.generator.StableDiffusionPipeline.from_pretrained
+)
 
 from pageloom.providers.local_diffusers import LocalDiffusersProvider
 
