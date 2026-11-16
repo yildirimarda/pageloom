@@ -87,3 +87,18 @@ def test_style_prompt_builder_from_example_image(tmp_path: Path):
     prompt = builder.build(content="cat")
     assert "content: cat" in prompt
     assert "inferred layout" in prompt or "centered_text_with_illustration" in prompt
+
+
+def test_style_prompt_builder_build_uses_reference_style_instead_of_description():
+    builder = StylePromptBuilder("whimsical watercolor, soft pastel palette")
+    prompt = builder.build(content="apple", use_reference_style=True)
+    assert "match the style of the reference images" in prompt
+    assert "style reference:" not in prompt
+    assert "content: apple" in prompt
+
+
+def test_style_prompt_builder_build_text_path_when_not_references():
+    builder = StylePromptBuilder("whimsical watercolor")
+    prompt = builder.build(content="apple")
+    assert "match the style of the reference images" not in prompt
+    assert "style reference: whimsical watercolor" in prompt

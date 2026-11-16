@@ -13,7 +13,7 @@ from pageloom.consistency import ConsistencyGuard
 from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
-from pageloom.providers import ImageProvider, build_image_provider
+from pageloom.providers import ImageProvider, ImageProviderCapabilities, build_image_provider
 from pageloom.providers.size_negotiation import generate_fitting_slot
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
@@ -87,6 +87,9 @@ class Pipeline:
         )
         # One result dict per page from the most recent run() (see _verify_page).
         self.consistency_results: list[dict] = []
+        # The first accepted generated page becomes a style reference for
+        # subsequent pages when the provider supports reference images.
+        self._first_generated_page: Image.Image | None = None
 
     def run(
         self,
@@ -243,7 +246,20 @@ class Pipeline:
                 pages.append(overlaid)
                 continue
 
-            # Standard single-image path
+            # Standard single-image path. When the provider accepts reference
+            # images, the example page and the first accepted generated page
+            # are sent as references with a style-matching instruction instead
+            # of the text-only style description; otherwise the text path is
+            # used (page 1 always starts text-only since no reference exists yet).
+            capabilities = getattr(self.generator, "capabilities", None)
+            supports_references = (
+                isinstance(capabilities, ImageProviderCapabilities)
+                and capabilities.max_reference_images > 0
+            )
+            references: list[str | Image.Image] | None = None
+            if supports_references and self._first_generated_page is not None:
+                references = [self.extractor.image, self._first_generated_page]
+
             prompt = self.prompt_builder.build(
                 content=content,
                 theme=theme,
@@ -251,6 +267,7 @@ class Pipeline:
                 element_count=structure.get("element_count"),
                 arrangement=structure.get("arrangement"),
                 text_image_relationship=structure.get("text_image_relationship"),
+                use_reference_style=bool(references),
             )
 
             cache_key = f"{content}:{theme}:{page_format}:{int(width)}:{int(height)}:{prompt}"
@@ -267,8 +284,15 @@ class Pipeline:
                     prompt=prompt,
                     width=int(width),
                     height=int(height),
+                    references=references,
                 )
                 image.save(str(cache_path), "PNG")
+
+            # Remember the first generated page so later pages can reference it
+            # for style consistency (page 1 is always generated text-only since
+            # no reference exists yet; from page 2 onward references are used).
+            if self._first_generated_page is None:
+                self._first_generated_page = image
 
             structure = self.page_structure or {}
             text_rel = structure.get("text_image_relationship")

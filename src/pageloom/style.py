@@ -44,8 +44,15 @@ class StylePromptBuilder:
         element_count: int | None = None,
         arrangement: str | None = None,
         text_image_relationship: str | None = None,
+        use_reference_style: bool = False,
     ) -> str:
-        """Produce a concrete prompt using the example style and content."""
+        """Produce a concrete prompt using the example style and content.
+
+        When ``use_reference_style`` is true (the provider accepts reference
+        images and at least one reference is being sent), the prompt instructs
+        the model to match the style of the reference images instead of
+        embedding the text-only style description.
+        """
         parts: list[str] = []
         if page_format == "object_name":
             parts.append("Photo-realistic children's book illustration")
@@ -79,7 +86,9 @@ class StylePromptBuilder:
                 structure_parts.append(f"text-image relationship: {text_image_relationship}")
         if structure_parts:
             parts.append("Structure: " + ", ".join(structure_parts))
-        if self.example_description:
+        if use_reference_style:
+            parts.append("match the style of the reference images")
+        elif self.example_description:
             parts.append(f"style reference: {self.example_description}")
         elif self.example_style is not None:
             parts.append(
