@@ -53,14 +53,6 @@ class Pipeline:
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
-        self.prompt_builder = StylePromptBuilder(
-            example_style=self.style,
-        )
-        # Resolve the image provider from the explicit `generator`, then the
-        # CLI/provider/model arguments, then the settings default (``local``).
-        self.generator = generator or build_image_provider(provider=provider, model=model)
-        self.overlay = TextOverlay(style_profile=self.style)
-        self.compiler = compiler or PDFCompiler()
         # Detect page structure for full structural routing through the pipeline.
         # A pre-computed `page_structure` (e.g. one the CLI already obtained via
         # vision analysis) is used as-is to avoid a second, redundant analysis
@@ -69,6 +61,23 @@ class Pipeline:
         self.page_structure = page_structure or detect_structure(
             source=example_image, description=description, vision_analyzer=vision_analyzer
         )
+        # Merge the vision model's real style description (medium, line weight,
+        # palette in colour names, background, lighting) into the style profile
+        # so StylePromptBuilder builds the diffusion prompt from the example's
+        # actual style instead of the layout label. Heuristic-fallback pages
+        # have no ``style`` key, so merge defensively; the builder keeps the
+        # layout-label fallback when no vision style is available.
+        vision_style = self.page_structure.get("style") or {}
+        if isinstance(vision_style, dict) and vision_style:
+            self.style["style"] = vision_style
+        self.prompt_builder = StylePromptBuilder(
+            example_style=self.style,
+        )
+        # Resolve the image provider from the explicit `generator`, then the
+        # CLI/provider/model arguments, then the settings default (``local``).
+        self.generator = generator or build_image_provider(provider=provider, model=model)
+        self.overlay = TextOverlay(style_profile=self.style)
+        self.compiler = compiler or PDFCompiler()
         # Consistency verification runs on every generated page by default
         # (opt out with `verify_consistency=False`). The guard is
         # built from the style/structure already extracted above (no duplicate

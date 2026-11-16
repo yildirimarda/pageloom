@@ -91,7 +91,45 @@ class StylePromptBuilder:
         elif self.example_description:
             parts.append(f"style reference: {self.example_description}")
         elif self.example_style is not None:
-            parts.append(
-                f"style reference: {self.example_style.get('composition', {}).get('layout_type', 'inferred layout')}"
-            )
+            style = self.example_style.get("style", {}) or {}
+            if not isinstance(style, dict):
+                style = {}
+            if style:
+                # Build the diffusion prompt from the example's real style
+                # (medium, line weight, palette in colour names, background,
+                # lighting) plus the extracted palette, instead of the layout
+                # label inferred from the example's composition.
+                medium = style.get("medium", "")
+                line_weight = style.get("line_weight", "")
+                background = style.get("background", "")
+                lighting = style.get("lighting", "")
+                style_bits = [
+                    bit
+                    for bit in [
+                        medium,
+                        f"{line_weight} line weight" if line_weight else "",
+                        f"{background} background" if background else "",
+                        f"{lighting} lighting" if lighting else "",
+                    ]
+                    if bit
+                ]
+                vision_palette = style.get("palette", [])
+                if not isinstance(vision_palette, list):
+                    vision_palette = []
+                extracted_palette = self.example_style.get("palette", [])
+                if not isinstance(extracted_palette, list):
+                    extracted_palette = []
+                palette_names = [str(p) for p in vision_palette + extracted_palette if p]
+                parts.append(
+                    "style reference: "
+                    + ", ".join(style_bits)
+                    + "; palette: "
+                    + ", ".join(palette_names)
+                )
+            else:
+                # No vision style description available: fall back to the
+                # layout label inferred from the example's composition.
+                parts.append(
+                    f"style reference: {self.example_style.get('composition', {}).get('layout_type', 'inferred layout')}"
+                )
         return ", ".join(parts) + "."

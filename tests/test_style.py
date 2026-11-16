@@ -65,6 +65,39 @@ def test_style_prompt_builder_build_with_example_style_dict():
     assert "style reference: centered_text_with_illustration" in prompt
 
 
+def test_style_prompt_builder_build_uses_style_description_instead_of_layout_label():
+    builder = StylePromptBuilder(
+        example_style={
+            "style": {
+                "medium": "watercolor",
+                "line_weight": "medium",
+                "palette": ["yellow", "orange", "white"],
+                "background": "white",
+                "lighting": "soft",
+            },
+            "palette": ["rgb(255, 224, 128)", "rgb(255, 160, 64)"],
+            "composition": {"layout_type": "centered_text_with_illustration"},
+        }
+    )
+    prompt = builder.build(content="ball")
+    assert (
+        "style reference: watercolor, medium line weight, white background, soft lighting" in prompt
+    )
+    assert "palette: yellow, orange, white, rgb(255, 224, 128), rgb(255, 160, 64)" in prompt
+    # The layout label must no longer be the style reference.
+    assert "centered_text_with_illustration" not in prompt
+    assert "content: ball" in prompt
+    assert prompt.endswith(".")
+
+
+def test_style_prompt_builder_build_falls_back_to_layout_label_without_style():
+    builder = StylePromptBuilder(
+        example_style={"composition": {"layout_type": "centered_text_with_illustration"}}
+    )
+    prompt = builder.build(content="ball")
+    assert "style reference: centered_text_with_illustration" in prompt
+
+
 def test_style_prompt_builder_build_with_structure():
     builder = StylePromptBuilder("soft pastel")
     prompt = builder.build(
