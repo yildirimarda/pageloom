@@ -1,5 +1,6 @@
 """Tests for the pluggable ImageProvider interface and capabilities record."""
 
+import json
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +16,9 @@ from pageloom.providers import (
     ImageProviderCapabilities,
     LocalDiffusersProvider,
     OpenAIImageProvider,
+    OpenRouterImageProvider,
     build_image_provider,
+    list_openrouter_image_models,
 )
 from pageloom.providers.size_negotiation import (
     fit_to_slot,
@@ -592,3 +595,113 @@ def test_gemini_image_provider_missing_credential_raises_clear_error(monkeypatch
         pytest.raises(RuntimeError, match="GEMINI_API_KEY"),
     ):
         build_image_provider(provider="gemini")
+
+
+# -- OpenRouter image provider --
+
+
+@contextmanager
+def _mock_openrouter_chat(b64_json=_VALID_B64_PNG):
+    """Patch sys.modules['openai'] with a fake client for OpenRouter image gen."""
+    import sys
+
+    mock_module = MagicMock()
+    mock_client = MagicMock()
+    mock_image = MagicMock()
+    mock_image.b64_json = b64_json
+    mock_message = MagicMock(images=[mock_image])
+    mock_choice = MagicMock(message=mock_message)
+    mock_response = MagicMock(choices=[mock_choice])
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_module.OpenAI.return_value = mock_client
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_module
+    try:
+        yield mock_client
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_openrouter_image_provider_is_an_image_provider():
+    provider = OpenRouterImageProvider()
+    assert isinstance(provider, ImageProvider)
+    assert provider.capabilities.max_reference_images == 1
+    assert provider.capabilities.supports_edit is False
+    assert provider.capabilities.supported_sizes == ((1024, 1024),)
+
+
+def test_openrouter_image_provider_model_id_read_from_settings(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_IMAGE_MODEL", "openai/gpt-image-2")
+    provider = OpenRouterImageProvider()
+    assert provider.model_id == "openai/gpt-image-2"
+
+
+def test_openrouter_image_provider_model_id_defaults_to_settings_default(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_IMAGE_MODEL", raising=False)
+    provider = OpenRouterImageProvider()
+    assert provider.model_id == settings.get_openrouter_image_model()
+
+
+def test_openrouter_image_provider_generate_sends_modalities_image(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    with _mock_openrouter_chat() as mock_client:
+        provider = OpenRouterImageProvider(api_key="test-key")
+        image = provider.generate("a red apple", width=1024, height=1024)
+        assert isinstance(image, Image.Image)
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["model"] == settings.get_openrouter_image_model()
+        assert call_kwargs["messages"] == [{"role": "user", "content": "a red apple"}]
+        assert call_kwargs["extra_body"]["modalities"] == ["image"]
+        assert call_kwargs["extra_body"]["width"] == 1024
+        assert call_kwargs["extra_body"]["height"] == 1024
+
+
+def test_openrouter_image_provider_generate_returns_image_from_b64_json(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    with _mock_openrouter_chat() as _mock_client:
+        provider = OpenRouterImageProvider(api_key="test-key")
+        image = provider.generate("a banana", width=512, height=512)
+        assert isinstance(image, Image.Image)
+        assert image.size == (1, 1)
+
+
+def test_openrouter_image_provider_missing_credential_raises_clear_error(monkeypatch):
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"),
+    ):
+        build_image_provider(provider="openrouter")
+
+
+def test_list_openrouter_image_models_filters_by_output_modality(monkeypatch):
+    payload = {
+        "data": [
+            {"id": "openai/gpt-image-2", "architecture": {"modality": "text->image"}},
+            {"id": "black-forest-labs/flux-pro", "architecture": {"modality": "text->image"}},
+            {"id": "google/gemma-4-26b-a4b-it", "architecture": {"modality": "text->text"}},
+            {"id": "openrouter/free", "architecture": {"modality": "text->image"}},
+        ]
+    }
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode("utf-8")
+
+    with patch(
+        "pageloom.providers.openrouter.urllib.request.urlopen",
+        return_value=_FakeResponse(),
+    ):
+        models = list_openrouter_image_models()
+
+    assert "openai/gpt-image-2" in models
+    assert "black-forest-labs/flux-pro" in models
+    assert "openrouter/free" in models
+    assert "google/gemma-4-26b-a4b-it" not in models

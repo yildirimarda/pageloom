@@ -9,11 +9,16 @@ from pageloom.providers.base import ImageProvider, ImageProviderCapabilities
 from pageloom.providers.gemini import GeminiImageProvider
 from pageloom.providers.local_diffusers import LocalDiffusersProvider
 from pageloom.providers.openai import OpenAIImageProvider
+from pageloom.providers.openrouter import (
+    OpenRouterImageProvider,
+    list_openrouter_image_models,
+)
 
 IMAGE_PROVIDER_MAP = {
     "local": LocalDiffusersProvider,
     "openai": OpenAIImageProvider,
     "gemini": GeminiImageProvider,
+    "openrouter": OpenRouterImageProvider,
 }
 
 # Environment variables (in preference order) that supply the credential for
@@ -23,6 +28,7 @@ IMAGE_PROVIDER_CREDENTIAL_ENV_VARS: dict[str, list[str]] = {
     "local": [],
     "openai": ["OPENAI_API_KEY"],
     "gemini": ["GEMINI_API_KEY"],
+    "openrouter": ["OPENROUTER_API_KEY"],
 }
 
 
@@ -76,6 +82,8 @@ __all__ = [
     "ImageProviderCapabilities",
     "LocalDiffusersProvider",
     "OpenAIImageProvider",
+    "OpenRouterImageProvider",
     "build_image_provider",
     "get_image_provider_class",
+    "list_openrouter_image_models",
 ]
