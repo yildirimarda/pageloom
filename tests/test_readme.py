@@ -108,3 +108,59 @@ def test_readme_documents_consistency_opt_out():
     assert "--no-consistency" in content
     assert "verify_consistency=False" in content
     assert "Consistency check: N/M" in content
+
+
+def test_readme_documents_choosing_an_image_model():
+    """The 'Choosing an image model' section must document each provider: how it
+    is configured, which accept reference images, rough cost behaviour, why the
+    model IDs are settings, and where to look up current models."""
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+
+    # The section itself exists.
+    assert "Choosing an image model" in content
+
+    # Provider selection is documented.
+    assert "PAGELOOM_IMAGE_PROVIDER" in content
+    assert "PAGELOOM_IMAGE_MODEL" in content
+    assert "--image-provider" in content
+    assert "--image-model" in content
+
+    # Each provider is documented with its credential and default model.
+    for provider in ("local", "openai", "gemini", "openrouter", "flux"):
+        assert (
+            f"`{provider}`" in content
+            or f"**{provider}**" in content
+            or f"`{provider}` —" in content
+        )
+    assert "OPENAI_API_KEY" in content
+    assert "GEMINI_API_KEY" in content
+    assert "OPENROUTER_API_KEY" in content
+    assert "BFL_API_KEY" in content or "FAL_KEY" in content or "REPLICATE_API_KEY" in content
+    assert "PAGELOOM_MODEL_ID" in content
+    assert "OPENAI_IMAGE_MODEL" in content
+    assert "GEMINI_IMAGE_MODEL" in content
+    assert "OPENROUTER_IMAGE_MODEL" in content
+    assert "PAGELOOM_FLUX_MODEL" in content
+
+    # Reference image support (and lack thereof) is documented.
+    assert "reference" in content.lower()
+    assert "text-to-image only" in content.lower() or "not forwarded" in content.lower()
+
+    # Rough cost behaviour is documented.
+    assert "$0.00" in content
+    assert "$0.040" in content or "$0.080" in content
+    assert "$0.030" in content
+    assert "$0.055" in content
+    assert "PAGELOOM_IMAGE_PRICE_TABLE" in content
+    assert "--max-cost" in content
+    assert "--estimate" in content
+
+    # Why the model IDs are settings is explained.
+    assert "Why the model IDs are settings" in content
+    assert "settings/env" in content.lower() or "settings/env" in content
+
+    # Where to look up current models is documented.
+    assert "openrouter.ai/models" in content
+    assert "huggingface.co/models" in content
+    assert "list_openrouter_image_models" in content

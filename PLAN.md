@@ -117,7 +117,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
 - [x] Add cost awareness: every provider reports an estimated cost per image from a configurable price table, `Pipeline` sums it, `--max-cost USD` stops the run before the budget is exceeded, and `--estimate` prints the expected cost for a run without calling any provider
 - [x] Add `pageloom check-image` that generates one small image with the configured provider and reports success or the exact failure, mirroring `check-vision`, so a setup can be validated before a full run
 - [x] Add opt-in live tests marked `live`, skipped unless `PAGELOOM_LIVE=1` and the provider's key is set, that generate one real image per provider and assert the quality gate from the next milestone passes; the default test run must stay offline and deterministic
-- [ ] Document the providers in README under a "Choosing an image model" section: how each is configured, which accept reference images, rough cost behaviour, why the model IDs are settings, and where to look up current models
+- [x] Document the providers in README under a "Choosing an image model" section: how each is configured, which accept reference images, rough cost behaviour, why the model IDs are settings, and where to look up current models
 
 ## Milestone 10: Make the local Stable Diffusion path produce usable images
 <!-- goal: the local model produces usable images with production settings; why: docs/IMAGE-BACKENDS.md -->
