@@ -26,6 +26,9 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "live: opt-in live provider tests (run only with PAGELOOM_LIVE=1 and the provider's key set)",
+]
 
 [tool.ruff]
 line-length = 100
