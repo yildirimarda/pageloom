@@ -190,6 +190,18 @@ def main(argv: list[str] | None = None) -> int:
             "(PAGELOOM_IMAGE_PRICE_TABLE) and the detected page structure."
         ),
     )
+    generate_parser.add_argument(
+        "--quick",
+        action="store_true",
+        default=False,
+        help=(
+            "Low-quality quick mode: generates with only a few inference steps "
+            "(e.g. 6) for fast, rough previews. Clearly low quality -- never "
+            "used for verification or consistency checks. Real runs use the "
+            "production defaults (25-30 steps, DPM++ multistep scheduler, "
+            "float16 on CUDA/MPS, guidance ~7)."
+        ),
+    )
 
     check_vision_parser = subparsers.add_parser(
         "check-vision",
@@ -404,11 +416,17 @@ def main(argv: list[str] | None = None) -> int:
         # method (vision or heuristic) during the automatic consistency check.
         vision_analyzer=vision_analyzer,
         # --no-consistency opts out of that check entirely (no guard runs and
-        # no `Consistency check:` report).
-        verify_consistency=not args.no_consistency,
+        # no `Consistency check:` report). --quick is low quality and is never
+        # used for verification, so it also skips the consistency check.
+        verify_consistency=not args.no_consistency and not args.quick,
         # --max-cost caps total estimated spend; the run stops before exceeding it.
         max_cost_usd=args.max_cost,
     )
+    if args.quick:
+        # Quick mode is low quality: drop to a rough-preview step count. The
+        # production defaults (25-30 steps) are used for real runs.
+        pipeline.generator.num_inference_steps = 6
+
     result = pipeline.run(
         contents=contents,
         output_path=args.output,

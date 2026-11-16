@@ -212,3 +212,31 @@ def test_get_replicate_api_key_default():
 def test_get_replicate_api_key_from_env(monkeypatch):
     monkeypatch.setenv("REPLICATE_API_KEY", "rep-key")
     assert settings.get_replicate_api_key() == "rep-key"
+
+
+def test_get_num_inference_steps_default():
+    assert settings.get_num_inference_steps() == 25
+
+
+def test_get_num_inference_steps_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_SD_STEPS", "30")
+    assert settings.get_num_inference_steps() == 30
+
+
+def test_get_num_inference_steps_invalid_env_falls_back(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_SD_STEPS", "not-a-number")
+    assert settings.get_num_inference_steps() == 25
+
+
+def test_get_guidance_scale_default():
+    assert settings.get_guidance_scale() == 7.5
+
+
+def test_get_guidance_scale_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_SD_GUIDANCE_SCALE", "7")
+    assert settings.get_guidance_scale() == 7.0
+
+
+def test_get_guidance_scale_invalid_env_falls_back(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_SD_GUIDANCE_SCALE", "not-a-number")
+    assert settings.get_guidance_scale() == 7.5

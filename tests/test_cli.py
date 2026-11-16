@@ -78,6 +78,45 @@ def test_cli_generate_pages_param(tmp_path: Path):
         assert contents == DEFAULT_CONTENTS[:3]
 
 
+def test_cli_quick_flag_skips_verification_and_uses_low_steps(tmp_path: Path):
+    """`--quick` is clearly low quality: it skips the consistency check and
+    drops the generator to a rough-preview step count. Never used for
+    verification; real runs keep the production defaults (25-30 steps)."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=_DEFAULT_VISION_STRUCTURE),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "3",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--quick",
+            ]
+        )
+        assert result == 0
+
+        # --quick must never be used for verification.
+        kwargs = mock_pipeline.call_args.kwargs
+        assert kwargs["verify_consistency"] is False
+
+        # --quick drops to a low step count (rough preview), not the production default.
+        assert mock_instance.generator.num_inference_steps == 6
+
+
 def test_cli_pages_less_than_one():
     result = main(["generate", "--pages", "0"])
     assert result == 1

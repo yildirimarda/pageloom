@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 
 import torch
-from diffusers import StableDiffusionPipeline
+from diffusers import DPMSolverMultistepScheduler, StableDiffusionPipeline
 from PIL import Image
 
 from pageloom import settings
@@ -97,7 +97,16 @@ class LocalDiffusersProvider:
             else:
                 device = "cpu"
         self.device = device
-        self.torch_dtype = torch_dtype or torch.float32
+        if torch_dtype is not None:
+            self.torch_dtype = torch_dtype
+        elif device in ("cuda", "mps"):
+            # float16 halves VRAM and is the production dtype on the GPU
+            # backends; CPU stays on float32 (float16 is unsupported/slow there).
+            self.torch_dtype = torch.float16
+        else:
+            self.torch_dtype = torch.float32
+        self.num_inference_steps = settings.get_num_inference_steps()
+        self.guidance_scale = settings.get_guidance_scale()
         if verify_license:
             verifier = LicenseVerifier(model_id=self.model_id)
             verifier.verify(
@@ -120,6 +129,14 @@ class LocalDiffusersProvider:
         self.pipeline = self.pipeline.to(self.device)
         # Attention slicing enabled consistently for lower memory usage
         self.pipeline.enable_attention_slicing()
+        # Production scheduler: DPM++ multistep (DPMSolverMultistepScheduler)
+        # gives good image quality at the 25-30 production inference steps.
+        # Only swap in a real scheduler when the pipeline exposed a config dict
+        # (a mocked pipeline in tests has a MagicMock config, which from_config
+        # would otherwise mistake for a model path and try to download).
+        scheduler_config = getattr(self.pipeline.scheduler, "config", None)
+        if isinstance(scheduler_config, dict):
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(scheduler_config)
         # SD1.5's bundled safety checker false-positives on benign children's-book
         # subjects (e.g. "banana", "cherry", "apple") and blacks out the whole
         # image, silently destroying the illustration we were asked to draw --
@@ -163,16 +180,24 @@ class LocalDiffusersProvider:
         references: list[str | Image.Image] | None = None,
         negative_prompt: str | None = None,
         seed: int | None = None,
-        num_inference_steps: int = 25,
-        guidance_scale: float = 7.5,
+        num_inference_steps: int | None = None,
+        guidance_scale: float | None = None,
     ) -> Image.Image:
         """Generate one illustration for ``prompt``.
 
         ``references`` is accepted for :class:`~pageloom.providers.base.ImageProvider`
         conformance but unused here (this provider can't take reference images;
         see ``capabilities.max_reference_images``).
+
+        ``num_inference_steps`` and ``guidance_scale`` fall back to the
+        production defaults stored on the instance (25 steps, ~7 guidance) when
+        not supplied explicitly.
         """
         del references  # this provider does not support reference images
+        if num_inference_steps is None:
+            num_inference_steps = self.num_inference_steps
+        if guidance_scale is None:
+            guidance_scale = self.guidance_scale
         max_retries = getattr(self, "safety_max_retries", _safety_max_retries())
         attempt = 0
         # Stable Diffusion's VAE requires width/height to be multiples of 8;

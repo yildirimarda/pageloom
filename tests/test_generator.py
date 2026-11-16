@@ -2,6 +2,9 @@ import importlib.util
 import pathlib
 from unittest.mock import MagicMock, patch
 
+import torch
+from PIL import Image
+
 PACKAGE_DIR = pathlib.Path("src/pageloom")
 
 
@@ -58,14 +61,19 @@ def test_illustration_generator_init_mps(mock_cuda, mock_mps, mock_from_pretrain
 def test_generator_uses_identical_settings_on_cpu_cuda_and_mps():
     from unittest.mock import MagicMock, patch
 
+    from diffusers import DPMSolverMultistepScheduler
+
     from pageloom.generator import IllustrationGenerator
 
-    # Verify the same torch_dtype and attention slicing regardless of device
+    # Verify dtype differs by device (float16 on CUDA/MPS, float32 on CPU) and
+    # the DPM++ multistep scheduler is the production default everywhere.
+    gens = []
     with patch(
         "pageloom.generator.StableDiffusionPipeline.from_pretrained"
     ) as mock_from_pretrained:
         mock_pipeline = MagicMock()
         mock_pipeline.to.side_effect = lambda device: mock_pipeline
+        mock_pipeline.scheduler.config = {}
         mock_from_pretrained.return_value = mock_pipeline
 
         # CPU path
@@ -73,22 +81,31 @@ def test_generator_uses_identical_settings_on_cpu_cuda_and_mps():
             patch("pageloom.generator.torch.cuda.is_available", return_value=False),
             patch("pageloom.generator.torch.backends.mps.is_available", return_value=False),
         ):
-            gen_cpu = IllustrationGenerator()
+            gens.append(("cpu", IllustrationGenerator()))
         # CUDA path
         with patch("pageloom.generator.torch.cuda.is_available", return_value=True):
-            gen_cuda = IllustrationGenerator()
+            gens.append(("cuda", IllustrationGenerator()))
         # MPS path
         with (
             patch("pageloom.generator.torch.cuda.is_available", return_value=False),
             patch("pageloom.generator.torch.backends.mps.is_available", return_value=True),
         ):
-            gen_mps = IllustrationGenerator()
+            gens.append(("mps", IllustrationGenerator()))
 
-    # All three should use float32 (no behavioral difference)
-    assert gen_cpu.torch_dtype == gen_cuda.torch_dtype == gen_mps.torch_dtype
-    assert str(gen_cpu.torch_dtype) == str(gen_cuda.torch_dtype) == str(gen_mps.torch_dtype)
-    # Attention slicing should be enabled consistently
-    assert mock_pipeline.enable_attention_slicing.call_count == 3
+    for device, gen in gens:
+        # Attention slicing enabled consistently on every device.
+        assert mock_pipeline.enable_attention_slicing.call_count >= 1
+        # Production scheduler is DPM++ multistep on every device.
+        assert isinstance(gen.pipeline.scheduler, DPMSolverMultistepScheduler)
+        # Production defaults are stored on the instance.
+        assert gen.num_inference_steps == 25
+        assert gen.guidance_scale == 7.5
+
+    gen_cpu, gen_cuda, gen_mps = [g for _, g in gens]
+    # CPU stays on float32; CUDA and MPS use float16.
+    assert gen_cpu.torch_dtype == torch.float32
+    assert gen_cuda.torch_dtype == torch.float16
+    assert gen_mps.torch_dtype == torch.float16
 
 
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
@@ -393,6 +410,52 @@ def test_generate_propagates_unrelated_value_error():
         assert "prompt_embeds" in str(exc)
     else:
         raise AssertionError("expected ValueError to propagate")
+
+
+def _capture_pipeline_call(gen, prompt="a happy cat", width=512, height=512, **kwargs):
+    """Call generate() and return the kwargs the mocked pipeline was invoked with."""
+    captured = {}
+
+    def side_effect(**call_kwargs):
+        captured.update(call_kwargs)
+        return MagicMock(
+            images=[
+                Image.new(
+                    "RGB",
+                    (call_kwargs.get("width", 1), call_kwargs.get("height", 1)),
+                    color="green",
+                )
+            ]
+        )
+
+    gen.pipeline.side_effect = side_effect
+    gen.generate(prompt, width=width, height=height, **kwargs)
+    return captured
+
+
+def test_generate_uses_production_default_steps_and_guidance():
+    """generate() with no step/guidance args uses the production defaults
+    (25 steps, ~7 guidance) rather than a reduced quick-preview count."""
+    from PIL import Image
+
+    gen, _ = _make_generator_with_pipeline_side_effect(
+        lambda **kw: MagicMock(images=[Image.new("RGB", (512, 512), color="green")])
+    )
+    captured = _capture_pipeline_call(gen)
+    assert captured.get("num_inference_steps") == 25
+    assert captured.get("guidance_scale") == 7.5
+
+
+def test_generate_respects_explicit_steps_and_guidance():
+    """Explicit num_inference_steps/guidance_scale override the instance defaults."""
+    from PIL import Image
+
+    gen, _ = _make_generator_with_pipeline_side_effect(
+        lambda **kw: MagicMock(images=[Image.new("RGB", (512, 512), color="green")])
+    )
+    captured = _capture_pipeline_call(gen, num_inference_steps=30, guidance_scale=7)
+    assert captured.get("num_inference_steps") == 30
+    assert captured.get("guidance_scale") == 7
 
 
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
