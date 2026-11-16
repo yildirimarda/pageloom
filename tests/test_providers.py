@@ -10,6 +10,7 @@ from pageloom import settings
 from pageloom.providers import (
     IMAGE_PROVIDER_CREDENTIAL_ENV_VARS,
     IMAGE_PROVIDER_MAP,
+    GeminiImageProvider,
     ImageProvider,
     ImageProviderCapabilities,
     LocalDiffusersProvider,
@@ -495,3 +496,99 @@ def test_openai_image_provider_missing_credential_raises_clear_error(monkeypatch
         pytest.raises(RuntimeError, match="OPENAI_API_KEY"),
     ):
         build_image_provider(provider="openai")
+
+
+@contextmanager
+def _mock_gemini_genai():
+    """Patch sys.modules['google.genai'] with a fake client for image generation."""
+    import base64
+    import sys
+
+    mock_module = MagicMock()
+    mock_client = MagicMock()
+    mock_part = MagicMock()
+    mock_part.inline_data.data = base64.b64decode(_VALID_B64_PNG)
+    mock_content = MagicMock(parts=[mock_part])
+    mock_candidate = MagicMock(content=mock_content)
+    mock_response = MagicMock(candidates=[mock_candidate])
+    mock_client.models.generate_content.return_value = mock_response
+    mock_module.Client.return_value = mock_client
+
+    original_modules = dict(sys.modules)
+    sys.modules["google.genai"] = mock_module
+    try:
+        yield mock_client
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_gemini_image_provider_is_an_image_provider():
+    provider = GeminiImageProvider()
+    assert isinstance(provider, ImageProvider)
+    assert provider.capabilities.max_reference_images == 1
+    assert provider.capabilities.supports_edit is True
+    assert provider.capabilities.supported_sizes == ((1024, 1024),)
+
+
+def test_gemini_image_provider_model_id_read_from_settings(monkeypatch):
+    monkeypatch.setenv("GEMINI_IMAGE_MODEL", "gemini-3.1-flash-image")
+    provider = GeminiImageProvider()
+    assert provider.model_id == "gemini-3.1-flash-image"
+
+
+def test_gemini_image_provider_model_id_defaults_to_settings_default(monkeypatch):
+    monkeypatch.delenv("GEMINI_IMAGE_MODEL", raising=False)
+    provider = GeminiImageProvider()
+    assert provider.model_id == settings.get_gemini_image_model()
+
+
+def test_gemini_image_provider_generate_with_references(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GEMINI_IMAGE_MODEL", "gemini-nano-banana-2.1")
+    with _mock_gemini_genai() as mock_client:
+        provider = GeminiImageProvider(api_key="test-key")
+        ref = Image.new("RGB", (1024, 1024), color="red")
+        image = provider.generate(
+            "make it match the example",
+            width=1024,
+            height=1024,
+            references=[ref],
+        )
+        assert isinstance(image, Image.Image)
+        call_kwargs = mock_client.models.generate_content.call_args.kwargs
+        assert call_kwargs["model"] == "gemini-nano-banana-2.1"
+        contents = call_kwargs["contents"]
+        assert contents[0] == "make it match the example"
+        assert contents[1] is ref  # reference image passed as a request part
+
+
+def test_gemini_image_provider_generate_without_references(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    with _mock_gemini_genai() as mock_client:
+        provider = GeminiImageProvider(api_key="test-key")
+        image = provider.generate("a red apple", width=1024, height=1024)
+        assert isinstance(image, Image.Image)
+        call_kwargs = mock_client.models.generate_content.call_args.kwargs
+        assert call_kwargs["model"] == settings.get_gemini_image_model()
+        assert call_kwargs["contents"] == ["a red apple"]
+
+
+def test_gemini_image_provider_generate_with_reference_file_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    ref_path = tmp_path / "ref.png"
+    Image.new("RGB", (1024, 1024), color="green").save(ref_path)
+    with _mock_gemini_genai() as mock_client:
+        provider = GeminiImageProvider(api_key="test-key")
+        image = provider.generate("match this", width=1024, height=1024, references=[str(ref_path)])
+        assert isinstance(image, Image.Image)
+        contents = mock_client.models.generate_content.call_args.kwargs["contents"]
+        assert isinstance(contents[1], Image.Image)
+
+
+def test_gemini_image_provider_missing_credential_raises_clear_error(monkeypatch):
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        pytest.raises(RuntimeError, match="GEMINI_API_KEY"),
+    ):
+        build_image_provider(provider="gemini")
