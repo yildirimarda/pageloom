@@ -129,7 +129,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
 - [x] Condition local generation on the example: support IP-Adapter or image-to-image with the example page as the reference and a strength setting, off by default, with a mocked-pipeline test that the reference reaches diffusers
 - [x] Add an automatic image quality gate: reject frames that are near-black, near-uniform, tiled or noise-like using cheap heuristics, optionally ask the vision model whether the requested subject is present, retry with a new seed up to a limit, and report a rejected image as a failure instead of writing it into the PDF; test with synthetic noise, black and blank images
 - [x] Warn before a run when the device is CPU and the estimated time exceeds a threshold, explaining that Docker on macOS cannot use MPS and suggesting a plain `uv run` or an online provider, with a test of the warning
-- [ ] Fix vision analysis so it stops falling back every time: default to a configured vision model instead of the `openrouter/free` router, use a model that accepts images from the models endpoint, and treat empty content as a retryable failure with a clear final message; test with a fake provider that returns empty content once
+- [x] Fix vision analysis so it stops falling back every time: default to a configured vision model instead of the `openrouter/free` router, use a model that accepts images from the models endpoint, and treat empty content as a retryable failure with a clear final message; test with a fake provider that returns empty content once
 
 ## Milestone 11: Generalize beyond children's-book pages
 <!-- goal: a general example-to-images tool, no children's book assumptions; why: docs/IMAGE-BACKENDS.md -->
