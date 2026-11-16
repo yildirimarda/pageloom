@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def get_model_id() -> str:
@@ -89,9 +92,11 @@ def get_vision_provider() -> str:
     """Default provider used for automatic visual page-structure analysis.
 
     Defaults to OpenRouter so a free, zero-cost vision-capable model can be
-    used out of the box (OpenRouter's `openrouter/free` auto-router selects
-    a free model that supports image understanding). Override with
-    PAGELOOM_VISION_PROVIDER if you'd rather use OpenAI or Anthropic.
+    used out of the box; the model itself comes from `get_openrouter_vision_model`
+    (discovered from OpenRouter's models endpoint rather than the
+    `openrouter/free` auto-router, which may route to a non-vision model and
+    return empty content). Override with PAGELOOM_VISION_PROVIDER if you'd
+    rather use OpenAI or Anthropic.
     """
     return os.environ.get("PAGELOOM_VISION_PROVIDER") or os.environ.get(
         "PAGELOOM_LLM_PROVIDER", "openrouter"
@@ -107,11 +112,36 @@ def get_anthropic_vision_model() -> str:
 
 
 def get_openrouter_vision_model() -> str:
-    # "openrouter/free" is OpenRouter's auto-router: it selects a free model
-    # at zero cost and filters for the capabilities the request needs (here,
-    # image understanding). This avoids hardcoding a specific free model ID,
-    # since the free model roster changes over time.
-    return os.environ.get("OPENROUTER_VISION_MODEL", "openrouter/free")
+    """Default vision model for automatic visual page-structure analysis.
+
+    Returns ``OPENROUTER_VISION_MODEL`` when set, otherwise discovers a
+    vision-capable model from OpenRouter's models endpoint (one that accepts
+    image *input*, e.g. ``image->text``) so the default does not depend on the
+    ``openrouter/free`` auto-router -- which may route a vision request to a
+    non-vision model that returns empty content and forces a fallback to the
+    heuristic classifier every time. Falls back to ``openrouter/free`` only if
+    discovery fails (offline, rate-limited, etc.).
+    """
+    configured = os.environ.get("OPENROUTER_VISION_MODEL")
+    if configured:
+        return configured
+    try:
+        # Imported lazily here (rather than at module top) to avoid a circular
+        # import: providers.openrouter imports settings.
+        from pageloom.providers.openrouter import list_openrouter_vision_models
+
+        models = list_openrouter_vision_models()
+        if models:
+            return models[0]
+    except (OSError, ValueError) as exc:
+        # Network failure or malformed models response: fall back to the
+        # auto-router instead of failing the whole run.
+        logger.debug(
+            "Could not discover a vision-capable model from OpenRouter's models "
+            "endpoint; falling back to openrouter/free: %s",
+            exc,
+        )
+    return "openrouter/free"
 
 
 def get_image_provider() -> str:

@@ -50,9 +50,14 @@ def test_real_vision_analysis_attempted_for_all_three():
 
     for filename in REAL_EXAMPLES.values():
         analyzer = PageVisionAnalyzer(provider="openrouter")
-        # Confirm real endpoint/model configured
+        # Confirm real endpoint/model configured: a vision-capable model
+        # discovered from the OpenRouter models endpoint (not the
+        # openrouter/free auto-router, which may route to a non-vision model
+        # and return empty content, forcing a fallback every time).
         assert analyzer.provider_name == "openrouter"
-        assert getattr(analyzer.provider, "model", None) == "openrouter/free"
+        model = getattr(analyzer.provider, "model", None)
+        assert model
+        assert model != "openrouter/free"
 
 
 def test_pipeline_uses_real_components():

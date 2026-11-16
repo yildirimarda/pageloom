@@ -236,8 +236,11 @@ def test_smoke_real_image_and_live_openrouter_key():
             pytest.skip("No OPENROUTER_API_KEY set for smoke test")
         analyzer = PageVisionAnalyzer(provider="openrouter")
         assert analyzer.provider_name == "openrouter"
-        # Confirm the free auto-router model is selected by default
-        assert analyzer.provider.model == "openrouter/free"
+        # Confirm a default vision model is configured: discovered from the
+        # OpenRouter models endpoint (a model that accepts images), not the
+        # openrouter/free auto-router, which may route to a non-vision model
+        # that returns empty content and forces a fallback every time.
+        assert analyzer.provider.model
         # Confirm image encoding works with a real file
         b64_url = analyzer._encode_image(img_path)
         assert b64_url.startswith("data:image/png;base64,")

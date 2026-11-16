@@ -136,7 +136,42 @@ def test_get_anthropic_vision_model_default():
 
 
 def test_get_openrouter_vision_model_default():
-    assert settings.get_openrouter_vision_model() == "openrouter/free"
+    """Without OPENROUTER_VISION_MODEL, the default is a vision-capable model
+    discovered from OpenRouter's models endpoint -- not the unreliable
+    ``openrouter/free`` auto-router."""
+    import json
+    from unittest.mock import patch
+
+    payload = {
+        "data": [
+            {
+                "id": "google/gemma-4-26b-a4b-it:free",
+                "architecture": {"modality": "text+image->text"},
+            },
+            {"id": "openai/gpt-4o-mini", "architecture": {"modality": "text->text"}},
+        ]
+    }
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode("utf-8")
+
+    with patch(
+        "pageloom.providers.openrouter.urllib.request.urlopen",
+        return_value=_FakeResponse(),
+    ):
+        assert settings.get_openrouter_vision_model() == "google/gemma-4-26b-a4b-it:free"
+
+
+def test_get_openrouter_vision_model_env_takes_precedence_over_discovery(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_VISION_MODEL", "some/vision-model:free")
+    assert settings.get_openrouter_vision_model() == "some/vision-model:free"
 
 
 def test_get_openrouter_vision_model_from_env(monkeypatch):

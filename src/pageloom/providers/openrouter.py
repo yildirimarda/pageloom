@@ -139,6 +139,38 @@ def list_openrouter_image_models(api_key: str | None = None) -> list[str]:
     ``image->image``), so users can pick a current image-output model id to
     set via ``OPENROUTER_IMAGE_MODEL`` or ``--image-model``.
     """
+    return _list_openrouter_models_by_modality(
+        api_key, modality_matches=lambda parts: len(parts) == 2 and parts[1] == "image"
+    )
+
+
+def list_openrouter_vision_models(api_key: str | None = None) -> list[str]:
+    """Return OpenRouter model ids that accept image *input* (vision-capable).
+
+    Fetches https://openrouter.ai/api/v1/models and keeps models whose
+    architecture modality indicates image is an input modality (e.g.
+    ``image->text``, ``text+image->text``). These are the models that can
+    actually look at an example page image and describe it -- unlike the
+    ``openrouter/free`` auto-router, which may route a vision request to a
+    non-vision model that returns empty content.
+
+    Model ids are configuration (the roster changes over time); callers that
+    need a specific model should pin it via ``OPENROUTER_VISION_MODEL``.
+    """
+    return _list_openrouter_models_by_modality(
+        api_key,
+        modality_matches=lambda parts: len(parts) == 2 and "image" in parts[0].split("+"),
+    )
+
+
+def _list_openrouter_models_by_modality(
+    api_key: str | None = None,
+    modality_matches: callable | None = None,
+) -> list[str]:
+    """Fetch OpenRouter's models endpoint and return model ids whose modality
+    matches ``modality_matches(parts)``, where ``parts`` is the
+    ``modality`` string split on ``"->"`` into (input, output).
+    """
     api_key = (
         api_key or os.environ.get("OPENROUTER_API_KEY") or os.environ.get("PAGELOOM_LLM_API_KEY")
     )
@@ -151,16 +183,20 @@ def list_openrouter_image_models(api_key: str | None = None) -> list[str]:
     with urllib.request.urlopen(request, timeout=30) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
-    image_models: list[str] = []
+    matched: list[str] = []
     for model in data.get("data", []):
         architecture = model.get("architecture") or {}
         modality = str(architecture.get("modality", ""))
         parts = [part.strip() for part in modality.split("->")]
-        if len(parts) == 2 and parts[1] == "image":
+        if modality_matches(parts):
             model_id = model.get("id")
             if model_id:
-                image_models.append(model_id)
-    return image_models
+                matched.append(model_id)
+    return matched
 
 
-__all__ = ["OpenRouterImageProvider", "list_openrouter_image_models"]
+__all__ = [
+    "OpenRouterImageProvider",
+    "list_openrouter_image_models",
+    "list_openrouter_vision_models",
+]

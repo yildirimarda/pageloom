@@ -115,7 +115,10 @@ def detect_structure(
             if is_vision_capability_mismatch:
                 warning_msg += (
                     " The selected model/provider does not appear to support image input. "
-                    "Set OPENROUTER_VISION_MODEL to a vision-capable model, or unset it to use the free auto-router (openrouter/free), which selects one automatically -- see README for how to find vision-capable models."
+                    "Set OPENROUTER_VISION_MODEL to a vision-capable model (one that accepts "
+                    "image input, found via OpenRouter's models endpoint), or leave it unset so "
+                    "the default is discovered from the models endpoint -- see README for how to "
+                    "find vision-capable models."
                 )
             print(warning_msg, file=sys.stderr)
     return PageStructureClassifier(source=source, description=description).classify()
