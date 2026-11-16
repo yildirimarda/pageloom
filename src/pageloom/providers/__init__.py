@@ -6,12 +6,14 @@ import os
 
 from pageloom import settings
 from pageloom.providers.base import ImageProvider, ImageProviderCapabilities
+from pageloom.providers.gemini import GeminiImageProvider
 from pageloom.providers.local_diffusers import LocalDiffusersProvider
 from pageloom.providers.openai import OpenAIImageProvider
 
 IMAGE_PROVIDER_MAP = {
     "local": LocalDiffusersProvider,
     "openai": OpenAIImageProvider,
+    "gemini": GeminiImageProvider,
 }
 
 # Environment variables (in preference order) that supply the credential for
@@ -20,6 +22,7 @@ IMAGE_PROVIDER_MAP = {
 IMAGE_PROVIDER_CREDENTIAL_ENV_VARS: dict[str, list[str]] = {
     "local": [],
     "openai": ["OPENAI_API_KEY"],
+    "gemini": ["GEMINI_API_KEY"],
 }
 
 
@@ -68,6 +71,7 @@ def build_image_provider(
 __all__ = [
     "IMAGE_PROVIDER_CREDENTIAL_ENV_VARS",
     "IMAGE_PROVIDER_MAP",
+    "GeminiImageProvider",
     "ImageProvider",
     "ImageProviderCapabilities",
     "LocalDiffusersProvider",

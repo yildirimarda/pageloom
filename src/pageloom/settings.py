@@ -84,3 +84,11 @@ def get_openai_image_model() -> str:
     Override with the ``OPENAI_IMAGE_MODEL`` environment variable.
     """
     return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-2")
+
+
+def get_gemini_image_model() -> str:
+    """Google Gemini Nano Banana image model id.
+
+    Override with the ``GEMINI_IMAGE_MODEL`` environment variable.
+    """
+    return os.environ.get("GEMINI_IMAGE_MODEL", "gemini-nano-banana-2.1")
