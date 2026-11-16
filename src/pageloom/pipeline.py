@@ -237,6 +237,35 @@ class Pipeline:
             elif pattern == "multi_item_scene":
                 derived_format = "themed_scene"
         page_format = derived_format
+        # Warn before a slow CPU run: Docker on macOS cannot use the MPS
+        # (Apple Silicon) backend, so local Stable Diffusion inside Docker
+        # falls back to CPU and can take minutes per page. Suggest plain
+        # `uv run` (MPS-capable on Apple Silicon) or an online provider.
+        device = getattr(self.generator, "device", None)
+        if device == "cpu":
+            structure = self.page_structure or {}
+            images_per_page = 1
+            if structure.get("text_image_relationship") == "multiple_labels":
+                images_per_page = max(1, int(structure.get("element_count", 1)))
+            steps = getattr(self.generator, "num_inference_steps", None)
+            if steps is None:
+                steps = settings.get_num_inference_steps()
+            estimated = settings.estimated_cpu_run_seconds(len(contents), steps, images_per_page)
+            threshold = settings.get_cpu_slow_warn_threshold_seconds()
+            if estimated > threshold:
+                print(
+                    "Warning: this run is estimated to take about "
+                    f"{estimated:.0f}s on CPU ({len(contents)} page(s) x {steps} "
+                    "step(s)). Docker on macOS cannot use the MPS (Apple "
+                    "Silicon) backend, so local Stable Diffusion inside Docker "
+                    "runs slowly on CPU. For faster generation, run locally "
+                    "with plain `uv run` (which can use MPS) or switch to an "
+                    "online image provider "
+                    "(--image-provider openai/gemini/openrouter/flux). "
+                    "Set PAGELOOM_CPU_SLOW_WARN_SECONDS=0 to silence this "
+                    "warning.",
+                    file=sys.stderr,
+                )
         output_path_obj = Path(output_path) if output_path else Path("output.pdf")
         output_dir = settings.get_output_dir()
         if output_dir is not None and not output_path_obj.is_absolute():

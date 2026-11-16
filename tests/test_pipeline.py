@@ -479,6 +479,88 @@ def test_pipeline_negotiates_provider_size_then_fits_to_slot(mock_compile, tmp_p
     assert pages[0].size == (616, 792)
 
 
+def test_pipeline_warns_before_slow_cpu_run(tmp_path: Path, capsys):
+    """A CPU run estimated to exceed the threshold prints a warning before
+    generation: Docker on macOS cannot use MPS; suggest `uv run` or online."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="blue").save(img_path)
+
+    class CpuProvider:
+        capabilities = ImageProviderCapabilities(max_reference_images=1)
+        device = "cpu"
+        num_inference_steps = 25
+
+        def generate(self, prompt, width, height, references=None, negative_prompt=None, seed=None):
+            return _passing_image(width, height)
+
+        def estimated_cost_usd(self, width, height):
+            return 0.0
+
+    provider = CpuProvider()
+    pipeline = Pipeline(example_image=str(img_path), generator=provider, verify_consistency=False)
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "out.pdf"
+        pipeline.run(contents=["Apple"] * 20, output_path=str(tmp_path / "out.pdf"))
+
+    captured = capsys.readouterr()
+    assert "CPU" in captured.err
+    assert "Docker" in captured.err
+    assert "uv run" in captured.err
+    assert "online" in captured.err.lower() or "provider" in captured.err
+
+
+def test_pipeline_does_not_warn_for_cpu_run_under_threshold(tmp_path: Path, capsys):
+    """A CPU run under the threshold prints no warning."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="blue").save(img_path)
+
+    class CpuProvider:
+        capabilities = ImageProviderCapabilities(max_reference_images=1)
+        device = "cpu"
+        num_inference_steps = 6
+
+        def generate(self, prompt, width, height, references=None, negative_prompt=None, seed=None):
+            return _passing_image(width, height)
+
+        def estimated_cost_usd(self, width, height):
+            return 0.0
+
+    provider = CpuProvider()
+    pipeline = Pipeline(example_image=str(img_path), generator=provider, verify_consistency=False)
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "out.pdf"
+        pipeline.run(contents=["Apple"], output_path=str(tmp_path / "out.pdf"))
+
+    captured = capsys.readouterr()
+    assert "Warning" not in captured.err
+
+
+def test_pipeline_does_not_warn_when_device_is_not_cpu(tmp_path: Path, capsys):
+    """Non-CPU devices (MPS/CUDA or a stub with no device) print no warning."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="blue").save(img_path)
+
+    class MpsProvider:
+        capabilities = ImageProviderCapabilities(max_reference_images=1)
+        device = "mps"
+        num_inference_steps = 25
+
+        def generate(self, prompt, width, height, references=None, negative_prompt=None, seed=None):
+            return _passing_image(width, height)
+
+        def estimated_cost_usd(self, width, height):
+            return 0.0
+
+    provider = MpsProvider()
+    pipeline = Pipeline(example_image=str(img_path), generator=provider, verify_consistency=False)
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "out.pdf"
+        pipeline.run(contents=["Apple"] * 20, output_path=str(tmp_path / "out.pdf"))
+
+    captured = capsys.readouterr()
+    assert "Warning" not in captured.err
+
+
 @patch("pageloom.pipeline.PDFCompiler.compile")
 @patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
 def test_pipeline_standard_path_generates_at_native_square_not_page_size(
