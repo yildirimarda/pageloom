@@ -76,3 +76,11 @@ def get_image_model() -> str | None:
     Override with the ``PAGELOOM_IMAGE_MODEL`` environment variable.
     """
     return os.environ.get("PAGELOOM_IMAGE_MODEL") or None
+
+
+def get_openai_image_model() -> str:
+    """OpenAI image-generation model id.
+
+    Override with the ``OPENAI_IMAGE_MODEL`` environment variable.
+    """
+    return os.environ.get("OPENAI_IMAGE_MODEL", "gpt-image-2")

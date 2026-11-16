@@ -7,9 +7,11 @@ import os
 from pageloom import settings
 from pageloom.providers.base import ImageProvider, ImageProviderCapabilities
 from pageloom.providers.local_diffusers import LocalDiffusersProvider
+from pageloom.providers.openai import OpenAIImageProvider
 
 IMAGE_PROVIDER_MAP = {
     "local": LocalDiffusersProvider,
+    "openai": OpenAIImageProvider,
 }
 
 # Environment variables (in preference order) that supply the credential for
@@ -17,6 +19,7 @@ IMAGE_PROVIDER_MAP = {
 # to an empty list.
 IMAGE_PROVIDER_CREDENTIAL_ENV_VARS: dict[str, list[str]] = {
     "local": [],
+    "openai": ["OPENAI_API_KEY"],
 }
 
 
@@ -68,6 +71,7 @@ __all__ = [
     "ImageProvider",
     "ImageProviderCapabilities",
     "LocalDiffusersProvider",
+    "OpenAIImageProvider",
     "build_image_provider",
     "get_image_provider_class",
 ]
