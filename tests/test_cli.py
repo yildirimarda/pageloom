@@ -750,6 +750,77 @@ def test_cli_check_vision_analysis_failure(tmp_path: Path):
         assert result == 1
 
 
+def test_cli_check_image_passes(tmp_path: Path, capsys):
+    """check-image should report PASS when the provider generates an image."""
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch("pageloom.cli.build_image_provider") as mock_build,
+    ):
+        mock_provider = MagicMock()
+        mock_provider.provider_name = "local"
+        mock_provider.model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+        mock_provider.generate.return_value = Image.new("RGB", (256, 256), color="red")
+        mock_build.return_value = mock_provider
+
+        result = main(["check-image"])
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "local" in captured.out
+        assert "stabilityai/stable-diffusion-xl-base-1.0" in captured.out
+        assert "PASS" in captured.out
+        mock_build.assert_called_once_with(provider=None, model=None)
+        mock_provider.generate.assert_called_once()
+
+
+def test_cli_check_image_fails_on_setup():
+    """check-image should exit 1 and print FAIL when provider setup fails."""
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch("pageloom.cli.build_image_provider", side_effect=RuntimeError("no API key")),
+    ):
+        result = main(["check-image"])
+        assert result == 1
+
+
+def test_cli_check_image_reports_provider_and_model(tmp_path: Path, capsys):
+    """check-image should clearly report provider/model and smoke-test result."""
+    with (
+        patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=False),
+        patch("pageloom.cli.build_image_provider") as mock_build,
+    ):
+        mock_provider = MagicMock()
+        mock_provider.provider_name = "gemini"
+        mock_provider.model_id = "gemini-nano-banana-2.1"
+        mock_provider.generate.return_value = Image.new("RGB", (256, 256), color="blue")
+        mock_build.return_value = mock_provider
+        result = main(
+            ["check-image", "--image-provider", "gemini", "--image-model", "gemini-nano-banana-2.1"]
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "gemini" in captured.out
+        assert "gemini-nano-banana-2.1" in captured.out
+        assert "PASS" in captured.out
+
+
+def test_cli_check_image_generation_failure(tmp_path: Path, capsys):
+    """If generate() raises, check-image exits 1 with FAIL naming the error."""
+    with (
+        patch.dict("os.environ", {}, clear=True),
+        patch("pageloom.cli.build_image_provider") as mock_build,
+    ):
+        mock_provider = MagicMock()
+        mock_provider.provider_name = "local"
+        mock_provider.model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+        mock_provider.generate.side_effect = RuntimeError("model download failed")
+        mock_build.return_value = mock_provider
+        result = main(["check-image"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "FAIL" in captured.err
+        assert "model download failed" in captured.err
+
+
 def test_cli_vision_provider_flag_passed_through(tmp_path: Path):
     img_path = tmp_path / "example.png"
     img = Image.new("RGB", (512, 512), color="purple")
