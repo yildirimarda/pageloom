@@ -140,6 +140,7 @@ loses detail), and burned request quota.
 - Never commit secrets, tokens or `.env` contents, and never print
   environment variables into files or logs.
 - When adding a new dependency, justify it in the PR description.
+- Do not count real generated output as done until the session attaches the produced image paths and a manifest with model id, steps, size, seed and prompt, and has looked at the image through the configured vision model or described it in the PR; pixel statistics, file existence and mocked generators are never evidence of visual quality.
 
 ## Cross-platform CI
 

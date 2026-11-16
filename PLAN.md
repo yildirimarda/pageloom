@@ -102,7 +102,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
 
 ## Milestone 9: Evidence rules, then pluggable image providers (online models)
 <!-- goal: image backends are pluggable so online models can be used; why: docs/IMAGE-BACKENDS.md -->
-- [ ] Add a rule to AGENTS.md under Prohibited: an item that claims real generated output is not done until the session attaches the produced image paths and a manifest with model id, steps, size, seed and prompt, and has looked at the image through the configured vision model or described it in the PR; pixel statistics, file existence and mocked generators are never evidence of visual quality
+- [x] Add a rule to AGENTS.md under Prohibited: an item that claims real generated output is not done until the session attaches the produced image paths and a manifest with model id, steps, size, seed and prompt, and has looked at the image through the configured vision model or described it in the PR; pixel statistics, file existence and mocked generators are never evidence of visual quality
 - [ ] Define an `ImageProvider` interface in `src/pageloom/providers/base.py` with `generate(prompt, width, height, references, negative_prompt, seed)` returning a PIL image, plus a capabilities record for maximum reference images, supported sizes or aspect ratios, negative prompt support and edit support, with unit tests against a fake provider
   - background, candidate models and rules for model ids: docs/IMAGE-BACKENDS.md
 - [ ] Move the Stable Diffusion code behind the interface as `LocalDiffusersProvider` and keep `IllustrationGenerator` importable as a thin alias so existing callers and tests keep working; `Pipeline` depends only on `ImageProvider`
