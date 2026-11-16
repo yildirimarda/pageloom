@@ -43,10 +43,17 @@ Look at the image and respond with ONLY a JSON object (no markdown fences, no co
   "element_count": <integer, how many distinct illustrated elements/items appear on the page>,
   "arrangement": "<one word: centered, grid, row, column, or scattered>",
   "text_image_relationship": "<one of: label_per_image, multiple_labels, no_text>",
-  "example_content_items": ["<the actual word/number/label(s) visible on THIS page>", "..."]
+  "example_content_items": ["<the actual word/number/label(s) visible on THIS page>", "..."],
+  "style": {
+    "medium": "<the illustration medium, e.g. watercolor, coloured pencil, digital flat art, ink drawing>",
+    "line_weight": "<the line weight, e.g. bold, medium, thin>",
+    "palette": ["<colour name>", ...],  // colour names, e.g. ["yellow", "orange", "white"]
+    "background": "<the background, e.g. white, pastel, textured paper>",
+    "lighting": "<the lighting, e.g. soft, bright, warm>"
+  }
 }
 
-Base "example_content_items" strictly on what is actually visible/legible on the page (e.g. if the page shows the number "3" next to three ducks, an example item could be "3 ducks"). If you cannot read any text, infer a reasonable label from the illustration instead. IMPORTANT: respond with ONLY the JSON object — no extra text, no explanation, no markdown fences, even if you are rate-limited or interrupted."""
+Base "example_content_items" strictly on what is actually visible/legible on the page (e.g. if the page shows the number "3" next to three ducks, an example item could be "3 ducks"). If you cannot read any text, infer a reasonable label from the illustration instead. The "style.palette" entries must be colour names, not RGB values. IMPORTANT: respond with ONLY the JSON object — no extra text, no explanation, no markdown fences, even if you are rate-limited or interrupted."""
 
 _REQUIRED_FIELDS = [
     "content_pattern",
@@ -288,6 +295,9 @@ class PageVisionAnalyzer:
         data.setdefault("example_content_items", [])
         if not isinstance(data.get("example_content_items"), list):
             data["example_content_items"] = []
+        style = data.get("style")
+        if not isinstance(style, dict):
+            data["style"] = {}
         try:
             data["element_count"] = int(data["element_count"])
         except (TypeError, ValueError):

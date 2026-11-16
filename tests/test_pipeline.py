@@ -686,3 +686,54 @@ def test_pipeline_keeps_text_path_when_provider_lacks_reference_support(
         assert call["references"] is None
         assert "match the style of the reference images" not in call["prompt"]
         assert "style reference:" in call["prompt"]
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_prompt_uses_vision_style_description_instead_of_layout_label(
+    mock_compile, tmp_path: Path
+):
+    """With a vision analyzer that returns a real style description, the
+    diffusion prompt is built from the example's style (medium, line weight,
+    palette in colour names, background, lighting) plus the extracted palette,
+    not from the layout label inferred from the example's composition."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    mock_compile.return_value = tmp_path / "output.pdf"
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = Image.new("RGB", (512, 512), color="red")
+    mock_gen.capabilities = ImageProviderCapabilities(max_reference_images=0)
+
+    class _FakeVision:
+        def analyze(self, source, description=""):
+            return {
+                "content_pattern": "single_letter_word_illustration",
+                "content_type_description": "a letter and word page",
+                "element_count": 1,
+                "arrangement": "centered",
+                "text_image_relationship": "label_per_image",
+                "example_content_items": ["A"],
+                "style": {
+                    "medium": "watercolor",
+                    "line_weight": "medium",
+                    "palette": ["yellow", "orange", "white"],
+                    "background": "white",
+                    "lighting": "soft",
+                },
+            }
+
+    pipeline = Pipeline(
+        example_image=str(img_path),
+        generator=mock_gen,
+        vision_analyzer=_FakeVision(),
+    )
+    pipeline.run(contents=["apple"], output_path=str(tmp_path / "output.pdf"))
+
+    prompt = mock_gen.generate.call_args.kwargs.get("prompt", "")
+    assert "watercolor" in prompt
+    assert "medium line weight" in prompt
+    assert "white background" in prompt
+    assert "soft lighting" in prompt
+    assert "palette: yellow, orange, white" in prompt
+    # The layout label must no longer be the style reference.
+    assert "centered_text_with_illustration" not in prompt
+    assert "content: apple" in prompt

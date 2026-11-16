@@ -93,6 +93,37 @@ def test_analyze_parses_valid_json_response(tmp_path):
         sys.modules.update(original_modules)
 
 
+def test_analyze_parses_style_description(tmp_path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    styled_json = (
+        '{"content_pattern": "number_count_matching", '
+        '"content_type_description": "a page pairing a number with that many objects", '
+        '"element_count": 3, "arrangement": "row", '
+        '"text_image_relationship": "label_per_image", '
+        '"example_content_items": ["3 ducks"], '
+        '"style": {"medium": "watercolor", "line_weight": "medium", '
+        '"palette": ["yellow", "orange", "white"], "background": "white", "lighting": "soft"}}'
+    )
+    mock_openai_module, _ = _mock_openai_module(styled_json)
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
+            analyzer = PageVisionAnalyzer(provider="openrouter")
+            result = analyzer.analyze(str(img_path))
+        assert result["style"]["medium"] == "watercolor"
+        assert result["style"]["line_weight"] == "medium"
+        assert result["style"]["palette"] == ["yellow", "orange", "white"]
+        assert result["style"]["background"] == "white"
+        assert result["style"]["lighting"] == "soft"
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
 def test_analyze_strips_markdown_code_fences(tmp_path):
     img_path = tmp_path / "example.png"
     Image.new("RGB", (612, 612), color="blue").save(img_path)
