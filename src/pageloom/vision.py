@@ -9,10 +9,12 @@ so arbitrary page types (numbers, digits, word-image matching, shapes,
 colors, etc.) are supported, not just the three originally hardcoded
 patterns.
 
-Defaults to OpenRouter's free auto-router model (see
+Defaults to a configured vision-capable model (see
 `settings.get_vision_provider`/`settings.get_openrouter_vision_model`) so the
-default, zero-config experience costs nothing. OpenAI and Anthropic are also
-supported for users who prefer them.
+default, zero-config experience uses a model that accepts images instead of
+the `openrouter/free` auto-router, which may route a vision request to a
+non-vision model that returns empty content and forces a fallback every time.
+OpenAI and Anthropic are also supported for users who prefer them.
 
 Note: the Stable Diffusion model used by `IllustrationGenerator` (via the
 `diffusers` library) is a text-to-image *generation* model only -- it cannot

@@ -154,7 +154,7 @@ Costs are estimates from the configurable price table (`PAGELOOM_IMAGE_PRICE_TAB
 
 ### Why the model IDs are settings
 
-Model names move fast — OpenRouter retires free models, Google and OpenAI ship new image models, and Black Forest Labs versions FLUX regularly. Every model ID is therefore configuration read from settings/env (`OPENAI_IMAGE_MODEL`, `GEMINI_IMAGE_MODEL`, `OPENROUTER_IMAGE_MODEL`, `PAGELOOM_FLUX_MODEL`, `PAGELOOM_MODEL_ID`), never hardcoded beyond a settings value. OpenRouter's defaults (`openrouter/free` for vision, `openrouter/auto` for images) are auto-routers that pick a current model supporting the requested capability, so you don't depend on a specific ID that might get retired. Verify any model ID you pin against the provider's current docs before relying on it.
+Model names move fast — OpenRouter retires free models, Google and OpenAI ship new image models, and Black Forest Labs versions FLUX regularly. Every model ID is therefore configuration read from settings/env (`OPENAI_IMAGE_MODEL`, `GEMINI_IMAGE_MODEL`, `OPENROUTER_IMAGE_MODEL`, `PAGELOOM_FLUX_MODEL`, `PAGELOOM_MODEL_ID`), never hardcoded beyond a settings value. OpenRouter's defaults (a vision-capable model discovered from the models endpoint for vision, falling back to `openrouter/free`; `openrouter/auto` for images) are auto-routers that pick a current model supporting the requested capability, so you don't depend on a specific ID that might get retired. Verify any model ID you pin against the provider's current docs before relying on it.
 
 ### Provider details
 
@@ -190,7 +190,7 @@ By default — when you don't pass `--description` or `--no-vision` — PageLoom
 
 **How to find current free vision-capable models on OpenRouter.**
 
-OpenRouter's free model roster changes constantly, so rather than hardcoding any specific model ID, the codebase defaults to the `openrouter/free` auto-router (`OPENROUTER_VISION_MODEL`). OpenRouter's own docs state that this router "smartly filters for models that support features needed for your request such as image understanding," which means it should automatically select a vision-capable model for a vision request without the user needing to look anything up.
+OpenRouter's free model roster changes constantly, so rather than hardcoding any specific model ID, the codebase discovers a vision-capable model from OpenRouter's models endpoint (`OPENROUTER_VISION_MODEL`) -- one that accepts image *input* -- and falls back to the `openrouter/free` auto-router only if discovery fails. OpenRouter's own docs state that this router "smartly filters for models that support features needed for your request such as image understanding."
 
 If you prefer to pick a specific model (e.g., because you want a particular provider's free tier or need a vision-capable model with a larger context window), you have two options:
 
@@ -198,9 +198,9 @@ If you prefer to pick a specific model (e.g., because you want a particular prov
 
 (b) As of this writing (Sept 2026), observed free vision-capable models include `google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`, `inclusionai/ling-3.0-flash-vl:free`, and `thinkingmachines/inkling-small:free`. Because OpenRouter's free-model roster "changes constantly" (their own wording), treat any named model as a snapshot with a freshness caveat — always verify the model is still free and vision-capable before relying on it.
 
-Set `OPENROUTER_VISION_MODEL` to the specific model ID you want, or leave it unset to use the free auto-router (`openrouter/free`), which avoids hardcoding a model that might get retired.
+Set `OPENROUTER_VISION_MODEL` to the specific model ID you want, or leave it unset to discover a vision-capable model from OpenRouter's models endpoint (which falls back to `openrouter/free` if discovery fails, avoiding hardcoding a model that might get retired).
 
-**Free by default.** The default provider for vision analysis is OpenRouter (override with `PAGELOOM_VISION_PROVIDER` or `--vision-provider`), using OpenRouter's `openrouter/free` auto-router as the default model (`OPENROUTER_VISION_MODEL`). This router selects a free, zero-cost model that supports image understanding — OpenRouter's free model roster changes over time, so the auto-router avoids hardcoding a specific model ID that might get retired. You only need an `OPENROUTER_API_KEY` (free to create, no credit card required) for this to work; see [openrouter.ai](https://openrouter.ai) to get one. OpenAI (`gpt-4o-mini`, vision-capable) and Anthropic (`claude-3-haiku-20240307`, vision-capable) are also supported if you'd rather use those.
+**Free by default.** The default provider for vision analysis is OpenRouter (override with `PAGELOOM_VISION_PROVIDER` or `--vision-provider`), using a vision-capable model discovered from OpenRouter's models endpoint as the default model (`OPENROUTER_VISION_MODEL`), falling back to the `openrouter/free` auto-router if discovery fails. This avoids hardcoding a specific model ID that might get retired. You only need an `OPENROUTER_API_KEY` (free to create, no credit card required) for this to work; see [openrouter.ai](https://openrouter.ai) to get one. OpenAI (`gpt-4o-mini`, vision-capable) and Anthropic (`claude-3-haiku-20240307`, vision-capable) are also supported if you'd rather use those.
 
 **Graceful, non-fatal fallback.** If vision analysis is unavailable (no API key configured) or fails (rate limit, timeout, malformed response), PageLoom prints a warning to stderr and falls back automatically to the old image-size heuristic (or your `--description`, if you provide one) rather than aborting the run. Vision analysis is a best-effort upgrade, not a hard requirement.
 
@@ -222,7 +222,7 @@ The `content_pattern` here is not restricted to the three legacy values below �
 **Vision environment variables:**
 
 - `PAGELOOM_VISION_PROVIDER` — provider used for automatic vision analysis (`openai`, `anthropic`, `openrouter`; falls back to `PAGELOOM_LLM_PROVIDER` if unset, then defaults to `openrouter`).
-- `OPENROUTER_VISION_MODEL` — OpenRouter vision model ID (default: `openrouter/free`, the free auto-router).
+- `OPENROUTER_VISION_MODEL` — OpenRouter vision model ID (default: a vision-capable model discovered from OpenRouter's models endpoint; falls back to `openrouter/free`, the free auto-router).
 - `OPENAI_VISION_MODEL` — OpenAI vision model ID (default: `gpt-4o-mini`).
 - `ANTHROPIC_VISION_MODEL` — Anthropic vision model ID (default: `claude-3-haiku-20240307`).
 - API keys are the same ones used for content generation (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or the generic `PAGELOOM_LLM_API_KEY`).
