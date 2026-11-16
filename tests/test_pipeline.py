@@ -6,7 +6,7 @@ from PIL import Image
 
 from pageloom.consistency import ConsistencyGuard
 from pageloom.pipeline import Pipeline, round_to_multiple
-from pageloom.providers import ImageProvider, ImageProviderCapabilities
+from pageloom.providers import ImageProvider, ImageProviderCapabilities, LocalDiffusersProvider
 
 
 def test_round_to_multiple_returns_multiple_of_8():
@@ -463,6 +463,104 @@ def test_pipeline_negotiates_provider_size_then_fits_to_slot(mock_compile, tmp_p
     # The compiled page is exactly the layout slot size.
     pages = mock_compile.call_args.args[0]
     assert pages[0].size == (616, 792)
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+def test_pipeline_standard_path_generates_at_native_square_not_page_size(
+    mock_from_pretrained, mock_compile, tmp_path: Path
+):
+    """The standard single-image path must generate at the model's native
+    square size (SD 1.5 = 512x512), never at the example page's raw size
+    (618x800 -> rounded 624x800)."""
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.return_value = mock_pipeline
+    mock_pipeline.return_value = MagicMock(images=[Image.new("RGB", (512, 512), color="red")])
+    mock_from_pretrained.return_value = mock_pipeline
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (618, 800), color="yellow").save(img_path)
+
+    class RecordingProvider(LocalDiffusersProvider):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.calls: list[tuple[int, int]] = []
+
+        def generate(
+            self,
+            prompt: str,
+            width: int,
+            height: int,
+            references: list[str | Image.Image] | None = None,
+            negative_prompt: str | None = None,
+            seed: int | None = None,
+        ) -> Image.Image:
+            self.calls.append((width, height))
+            return super().generate(prompt, width, height, references, negative_prompt, seed)
+
+    provider = RecordingProvider(verify_license=False)
+    assert provider.native_size == 512
+    pipeline = Pipeline(example_image=str(img_path), generator=provider)
+    pipeline.run(contents=["apple"], output_path=str(tmp_path / "output.pdf"))
+    assert provider.calls == [(512, 512)], f"expected native 512x512, got {provider.calls}"
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+def test_pipeline_multi_picture_pages_request_square_native_size(
+    mock_from_pretrained, mock_compile, tmp_path: Path
+):
+    """Multi-picture (multiple_labels) pages must request square native-size
+    images, never the narrow sub-slots derived by dividing the page."""
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.return_value = mock_pipeline
+    mock_pipeline.return_value = MagicMock(images=[Image.new("RGB", (1024, 1024), color="red")])
+    mock_from_pretrained.return_value = mock_pipeline
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (618, 800), color="yellow").save(img_path)
+
+    class RecordingProvider(LocalDiffusersProvider):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.calls: list[tuple[int, int]] = []
+
+        def generate(
+            self,
+            prompt: str,
+            width: int,
+            height: int,
+            references: list[str | Image.Image] | None = None,
+            negative_prompt: str | None = None,
+            seed: int | None = None,
+        ) -> Image.Image:
+            self.calls.append((width, height))
+            return super().generate(prompt, width, height, references, negative_prompt, seed)
+
+    provider = RecordingProvider(
+        model_id="stabilityai/stable-diffusion-xl-base-1.0", verify_license=False
+    )
+    assert provider.native_size == 1024
+    pipeline = Pipeline(
+        example_image=str(img_path),
+        generator=provider,
+        page_structure={
+            "content_pattern": "multi_item_scene",
+            "element_count": 3,
+            "arrangement": "column",
+            "text_image_relationship": "multiple_labels",
+        },
+    )
+    pipeline.run(
+        contents=["apple, banana, cherry"],
+        output_path=str(tmp_path / "output.pdf"),
+    )
+    # 3 sub-images, each requested at the SDXL-native 1024x1024 square, not at
+    # the narrow ~206x400 sub-slots a 618x800 page divided into 3 columns would
+    # imply. Square generation, then fit into the layout slot.
+    assert provider.calls == [(1024, 1024), (1024, 1024), (1024, 1024)], provider.calls
 
 
 class _ReferenceSupportingProvider:

@@ -46,6 +46,21 @@ def _is_black_image(image: Image.Image, threshold: int = 8) -> bool:
     return all(channel_max <= threshold for _lo, channel_max in extrema)
 
 
+def _native_generation_size(model_id: str) -> int:
+    """Return the native square generation size for a Stable Diffusion model family.
+
+    SD 1.5 was trained at 512 x 512 and SDXL-class models at 1024 x 1024.
+    Generating at any other size -- page size or narrow strips -- produces
+    duplicated, tiled noise because the model was never trained there; see
+    docs/IMAGE-BACKENDS.md. The model id is configuration, so the family is
+    inferred from it rather than hardcoding a size per provider.
+    """
+    lowered = model_id.lower()
+    if "sdxl" in lowered or "stable-diffusion-xl" in lowered:
+        return 1024
+    return 512
+
+
 class LocalDiffusersProvider:
     """Generate illustrations using a Stable Diffusion pipeline.
 
@@ -54,8 +69,6 @@ class LocalDiffusersProvider:
     """
 
     provider_name = "local"
-
-    capabilities = ImageProviderCapabilities(supports_negative_prompt=True)
 
     def __init__(
         self,
@@ -66,6 +79,11 @@ class LocalDiffusersProvider:
         license_context: str = "book intended for sale",
     ) -> None:
         self.model_id = model_id if model_id is not None else settings.get_model_id()
+        self.native_size = _native_generation_size(self.model_id)
+        self.capabilities = ImageProviderCapabilities(
+            supported_sizes=((self.native_size, self.native_size),),
+            supports_negative_prompt=True,
+        )
         self.verify_license = verify_license
         self.license_context = license_context
         if device is None:

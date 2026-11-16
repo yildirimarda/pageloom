@@ -329,6 +329,64 @@ def test_negotiate_size_supported_sizes_take_precedence_over_ratios():
     assert negotiate_size(768, 512, caps) == (512, 512)
 
 
+# -- LocalDiffusersProvider: generation size policy per model family --
+
+
+def test_native_generation_size_picks_model_family_size():
+    from pageloom.providers.local_diffusers import _native_generation_size
+
+    assert _native_generation_size("runwayml/stable-diffusion-v1-5") == 512
+    assert _native_generation_size("some/other-model") == 512
+    assert _native_generation_size("stabilityai/stable-diffusion-xl-base-1.0") == 1024
+    assert _native_generation_size("stabilityai/sdxl-turbo") == 1024
+    assert _native_generation_size("stabilityai/stable-diffusion-xl-refiner-1.0") == 1024
+
+
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+def test_local_provider_declares_square_native_size_per_model_family(mock_from_pretrained):
+    """SD 1.5 generates at 512x512, SDXL-class at 1024x1024, always square.
+
+    The provider's ``supported_sizes`` drives size negotiation, so generation
+    happens at the native square size and ``generate_fitting_slot`` fits the
+    result into the layout slot -- never at page size or a narrow aspect ratio.
+    """
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.return_value = mock_pipeline
+    mock_from_pretrained.return_value = mock_pipeline
+
+    sd15 = LocalDiffusersProvider(model_id="runwayml/stable-diffusion-v1-5", verify_license=False)
+    assert sd15.native_size == 512
+    assert sd15.capabilities.supported_sizes == ((512, 512),)
+
+    sdxl = LocalDiffusersProvider(
+        model_id="stabilityai/stable-diffusion-xl-base-1.0", verify_license=False
+    )
+    assert sdxl.native_size == 1024
+    assert sdxl.capabilities.supported_sizes == ((1024, 1024),)
+
+    sdxl_turbo = LocalDiffusersProvider(model_id="stabilityai/sdxl-turbo", verify_license=False)
+    assert sdxl_turbo.native_size == 1024
+
+
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+def test_generate_fitting_slot_uses_local_provider_native_square(mock_from_pretrained):
+    """A 612x792 layout slot on SD 1.5 must generate at 512x512 (native square)
+    and be padded back to the slot, not generated at page size."""
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.return_value = mock_pipeline
+    mock_pipeline.return_value = MagicMock(images=[Image.new("RGB", (512, 512), color="blue")])
+    mock_from_pretrained.return_value = mock_pipeline
+
+    provider = LocalDiffusersProvider(
+        model_id="runwayml/stable-diffusion-v1-5", verify_license=False
+    )
+    image = generate_fitting_slot(provider, "a cat", 612, 792)
+    assert image.size == (612, 792)
+    # Generation happened at the native square size, not the requested slot size.
+    gen_w, gen_h = mock_pipeline.call_args.kwargs["width"], mock_pipeline.call_args.kwargs["height"]
+    assert (gen_w, gen_h) == (512, 512)
+
+
 # -- fit_to_slot: crop or pad back to the layout slot --
 
 
