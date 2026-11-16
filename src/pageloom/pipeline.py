@@ -14,6 +14,7 @@ from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
 from pageloom.providers import ImageProvider, build_image_provider
+from pageloom.providers.size_negotiation import generate_fitting_slot
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
 
@@ -176,8 +177,10 @@ class Pipeline:
                         sub_w = max(150, int(width) // max(1, count))
                         sub_h = max(150, int(height) // 2)
 
-                    # Generate sub-image (skip individual sub-caching for simplicity)
-                    sub_image = self.generator.generate(
+                    # Generate sub-image at a provider-native size, then fit it
+                    # back to the sub-slot (skip individual sub-caching).
+                    sub_image = generate_fitting_slot(
+                        self.generator,
                         prompt=sub_prompt,
                         width=round_to_multiple(sub_w),
                         height=round_to_multiple(sub_h),
@@ -257,7 +260,10 @@ class Pipeline:
             if not force and cache_path.exists():
                 image = Image.open(str(cache_path))
             else:
-                image = self.generator.generate(
+                # Negotiate a provider-native size, generate, then crop/pad
+                # back to the layout slot (size negotiation).
+                image = generate_fitting_slot(
+                    self.generator,
                     prompt=prompt,
                     width=int(width),
                     height=int(height),

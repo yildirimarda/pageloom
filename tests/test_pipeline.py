@@ -417,3 +417,43 @@ def test_pipeline_depends_only_on_image_provider_interface(tmp_path: Path):
     provider = StubProvider()
     pipeline = Pipeline(example_image=str(img_path), generator=provider)
     assert pipeline.generator is provider
+
+
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_negotiates_provider_size_then_fits_to_slot(mock_compile, tmp_path: Path):
+    """A provider that only supports 512x512 and 1024x1024 must generate at the
+    nearest supported size, and the pipeline must crop/pad the result back to
+    the layout slot (size negotiation, Milestone 9)."""
+    mock_compile.return_value = tmp_path / "out.pdf"
+    calls: list[tuple[int, int]] = []
+
+    class CappedProvider:
+        capabilities = ImageProviderCapabilities(supported_sizes=((512, 512), (1024, 1024)))
+
+        def generate(
+            self,
+            prompt: str,
+            width: int,
+            height: int,
+            references: list[str | Image.Image] | None = None,
+            negative_prompt: str | None = None,
+            seed: int | None = None,
+        ) -> Image.Image:
+            calls.append((width, height))
+            return Image.new("RGB", (width, height), color="red")
+
+    # 612 is not a multiple of 8: the page slot rounds up to 616x792.
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 792), color="yellow").save(img_path)
+    provider = CappedProvider()
+    pipeline = Pipeline(example_image=str(img_path), generator=provider)
+    pipeline.run(
+        contents=["apple"],
+        output_path=str(tmp_path / "out.pdf"),
+    )
+    # Generation happened at the nearest supported size (512x512 by area),
+    # not at the requested 616x792 slot size.
+    assert calls == [(512, 512)], f"expected generation at 512x512, got {calls}"
+    # The compiled page is exactly the layout slot size.
+    pages = mock_compile.call_args.args[0]
+    assert pages[0].size == (616, 792)
