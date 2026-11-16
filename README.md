@@ -93,6 +93,8 @@ PageLoom supports an optional LLM-based content generator for arbitrary page top
 - `ANTHROPIC_LLM_MODEL` — Anthropic model ID (`claude-3-haiku-20240307`).
 - `OPENROUTER_LLM_MODEL` — OpenRouter model ID (`openai/gpt-4o-mini`).
 - `PAGELOOM_LLM_ENDPOINT` — custom endpoint URL (mainly for OpenRouter or OpenAI-compatible proxies).
+- `PAGELOOM_IMAGE_PROVIDER` — image-generation provider (default: `local`).
+- `PAGELOOM_IMAGE_MODEL` — image model id (default: the provider's own default).
 
 If the selected provider's API key is missing at startup, `LLMContentGenerator` raises a clear `RuntimeError` naming the expected environment variables instead of silently falling back.
 
@@ -102,6 +104,8 @@ The CLI wrapper (`pageloom generate --pages N`) supports:
 
 - `--use-llm` — enable LLM-based content generation when `--pages` exceeds the available built-in list.
 - `--llm-provider {openai,anthropic,openrouter}` — override the provider selected by `PAGELOOM_LLM_PROVIDER`.
+- `--image-provider {local}` — override the image-generation provider selected by `PAGELOOM_IMAGE_PROVIDER` (default: `local`).
+- `--image-model` — override the image model id selected by `PAGELOOM_IMAGE_MODEL` (default: the provider's own default model).
 - `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). This is passed straight through to structure detection and `Pipeline`. Providing it is treated as an explicit override that **skips automatic vision analysis** (see below) — useful if you already know the page type and want to avoid the network call.
 - `--no-vision` — disable automatic vision-based page-structure analysis (see next section) and fall back to the image-size heuristic instead.
 - `--vision-provider {openai,anthropic,openrouter}` — provider used for automatic vision analysis (default: `openrouter`, free tier).

@@ -64,6 +64,8 @@ def test_cli_generate_pages_param(tmp_path: Path):
             example_image=str(img_path),
             description="",
             page_structure=detected_structure,
+            provider=None,
+            model=None,
             vision_analyzer=mock_vision_cls.return_value,
             verify_consistency=True,
         )
@@ -478,6 +480,8 @@ def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
             example_image=str(img_path),
             description="object name pair",
             page_structure=detected_structure,
+            provider=None,
+            model=None,
             vision_analyzer=None,
             verify_consistency=True,
         )
@@ -538,6 +542,8 @@ def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
             example_image=str(img_path),
             description="",
             page_structure=vision_structure,
+            provider=None,
+            model=None,
             vision_analyzer=mock_vision_cls.return_value,
             verify_consistency=True,
         )
@@ -779,6 +785,43 @@ def test_cli_vision_provider_flag_passed_through(tmp_path: Path):
         mock_vision_cls.assert_called_once_with(provider="anthropic")
 
 
+def test_cli_image_provider_and_model_flags_passed_through(tmp_path: Path):
+    """`--image-provider` and `--image-model` are passed through to Pipeline
+    so provider switching works through the CLI."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = dict(_DEFAULT_VISION_STRUCTURE)
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "3",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--image-provider",
+                "local",
+                "--image-model",
+                "custom/image-model",
+            ]
+        )
+        assert result == 0
+        mock_pipeline.assert_called_once()
+        kwargs = mock_pipeline.call_args.kwargs
+        assert kwargs["provider"] == "local"
+        assert kwargs["model"] == "custom/image-model"
+
+
 def test_cli_generate_runs_consistency_guard_with_vision_analyzer(tmp_path: Path, capsys):
     """`pageloom generate` must actually run ConsistencyGuard on every generated
     page (previously the class was only ever constructed inside tests), and the
@@ -814,7 +857,7 @@ def test_cli_generate_runs_consistency_guard_with_vision_analyzer(tmp_path: Path
 
     with (
         patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
-        patch("pageloom.pipeline.IllustrationGenerator") as mock_gen_cls,
+        patch("pageloom.pipeline.build_image_provider") as mock_gen_cls,
         patch("pageloom.pipeline.ConsistencyGuard", side_effect=make_guard),
     ):
         mock_vision_cls.return_value.analyze.return_value = vision_structure

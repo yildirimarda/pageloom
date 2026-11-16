@@ -10,6 +10,7 @@ from pageloom import settings
 from pageloom.content_generator import LLMContentGenerator
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pipeline import Pipeline
+from pageloom.providers import IMAGE_PROVIDER_MAP
 from pageloom.vision import PageVisionAnalyzer, VisionAnalysisError
 
 # Default alphabet-style content list used when no explicit contents are given.
@@ -156,6 +157,19 @@ def main(argv: list[str] | None = None) -> int:
         choices=["openai", "anthropic", "openrouter"],
         help="LLM provider to use for content generation (default: openai).",
     )
+    generate_parser.add_argument(
+        "--image-provider",
+        type=str,
+        default=None,
+        choices=list(IMAGE_PROVIDER_MAP),
+        help="Image-generation provider (default: local, from PAGELOOM_IMAGE_PROVIDER).",
+    )
+    generate_parser.add_argument(
+        "--image-model",
+        type=str,
+        default=None,
+        help="Image model id (default: provider default, from PAGELOOM_IMAGE_MODEL).",
+    )
 
     check_vision_parser = subparsers.add_parser(
         "check-vision",
@@ -299,13 +313,15 @@ def main(argv: list[str] | None = None) -> int:
     pipeline = Pipeline(
         example_image=args.example,
         description=args.description,
+        provider=args.image_provider,
+        model=args.image_model,
         page_structure=page_structure,
         # Same analyzer used to classify the example: Pipeline forwards it to
         # ConsistencyGuard so generated pages are re-classified with the same
         # method (vision or heuristic) during the automatic consistency check.
         vision_analyzer=vision_analyzer,
-        # --no-consistency opts out of that check entirely (no per-page guard
-        # call, no `Consistency check:` report).
+        # --no-consistency opts out of that check entirely (no guard runs and
+        # no `Consistency check:` report).
         verify_consistency=not args.no_consistency,
     )
     result = pipeline.run(
