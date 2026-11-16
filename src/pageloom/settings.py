@@ -92,3 +92,14 @@ def get_gemini_image_model() -> str:
     Override with the ``GEMINI_IMAGE_MODEL`` environment variable.
     """
     return os.environ.get("GEMINI_IMAGE_MODEL", "gemini-nano-banana-2.1")
+
+
+def get_openrouter_image_model() -> str:
+    """OpenRouter image-generation model id.
+
+    Override with the ``OPENROUTER_IMAGE_MODEL`` environment variable.
+    Defaults to OpenRouter's auto-router, which selects a model that supports
+    the requested capabilities (here image output) without hardcoding a
+    specific free model id, since the model roster changes over time.
+    """
+    return os.environ.get("OPENROUTER_IMAGE_MODEL", "openrouter/auto")
