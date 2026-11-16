@@ -1,11 +1,19 @@
 """Tests for the pluggable ImageProvider interface and capabilities record."""
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
 from PIL import Image
 
-from pageloom.providers import ImageProvider, ImageProviderCapabilities, LocalDiffusersProvider
+from pageloom.providers import (
+    IMAGE_PROVIDER_CREDENTIAL_ENV_VARS,
+    IMAGE_PROVIDER_MAP,
+    ImageProvider,
+    ImageProviderCapabilities,
+    LocalDiffusersProvider,
+    build_image_provider,
+)
 
 
 class FakeProvider:
@@ -174,3 +182,69 @@ def test_local_diffusers_provider_generate_conforms_to_interface(
     assert kwargs["width"] == 512
     assert kwargs["height"] == 512
     assert kwargs["generator"] is not None
+
+
+@contextmanager
+def _mock_sd_backend():
+    """Context manager stubbing out the real Stable Diffusion load."""
+    with (
+        patch(
+            "pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained"
+        ) as mock_from,
+        patch("pageloom.providers.local_diffusers.torch.cuda.is_available", return_value=False),
+        patch(
+            "pageloom.providers.local_diffusers.torch.backends.mps.is_available", return_value=False
+        ),
+    ):
+        mock_pipeline = MagicMock()
+        mock_pipeline.to.side_effect = lambda device: mock_pipeline
+        mock_from.return_value = mock_pipeline
+        yield mock_from, mock_pipeline
+
+
+def test_build_image_provider_defaults_to_local(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_IMAGE_PROVIDER", "local")
+    with _mock_sd_backend() as (mock_from, _mock_pipeline):
+        provider = build_image_provider()
+        assert isinstance(provider, LocalDiffusersProvider)
+        assert provider.model_id == "runwayml/stable-diffusion-v1-5"
+        mock_from.assert_called_once()
+
+
+def test_build_image_provider_explicit_provider_and_model(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_IMAGE_PROVIDER", "local")
+    with _mock_sd_backend() as (mock_from, _mock_pipeline):
+        provider = build_image_provider(provider="local", model="custom/image-model")
+        assert isinstance(provider, LocalDiffusersProvider)
+        assert provider.model_id == "custom/image-model"
+        call_args = mock_from.call_args
+        assert call_args.args[0] == "custom/image-model"
+
+
+def test_build_image_provider_unknown_provider_raises_value_error():
+    with pytest.raises(ValueError, match="Unknown image provider 'not-a-real-provider'"):
+        build_image_provider(provider="not-a-real-provider")
+
+
+def test_build_image_provider_missing_credential_raises_clear_error(monkeypatch):
+    class DemoProvider:
+        capabilities = ImageProviderCapabilities()
+
+        def generate(
+            self,
+            prompt: str,
+            width: int,
+            height: int,
+            references: list | None = None,
+            negative_prompt: str | None = None,
+            seed: int | None = None,
+        ):
+            return Image.new("RGB", (width, height))
+
+    monkeypatch.setitem(IMAGE_PROVIDER_MAP, "demo", DemoProvider)
+    monkeypatch.setitem(IMAGE_PROVIDER_CREDENTIAL_ENV_VARS, "demo", ["PAGELOOM_DEMO_KEY"])
+    with (
+        patch.dict("os.environ", {"PAGELOOM_IMAGE_PROVIDER": "demo"}, clear=True),
+        pytest.raises(RuntimeError, match="PAGELOOM_DEMO_KEY"),
+    ):
+        build_image_provider()

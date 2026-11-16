@@ -60,3 +60,19 @@ def get_openrouter_vision_model() -> str:
     # image understanding). This avoids hardcoding a specific free model ID,
     # since the free model roster changes over time.
     return os.environ.get("OPENROUTER_VISION_MODEL", "openrouter/free")
+
+
+def get_image_provider() -> str:
+    """Image-generation provider: ``local`` (default) or a registered provider.
+
+    Override with the ``PAGELOOM_IMAGE_PROVIDER`` environment variable.
+    """
+    return os.environ.get("PAGELOOM_IMAGE_PROVIDER", "local")
+
+
+def get_image_model() -> str | None:
+    """Explicit image model id, or ``None`` to let the provider pick its default.
+
+    Override with the ``PAGELOOM_IMAGE_MODEL`` environment variable.
+    """
+    return os.environ.get("PAGELOOM_IMAGE_MODEL") or None

@@ -149,3 +149,21 @@ def test_illustration_generator_uses_env_device(monkeypatch):
 
         gen = IllustrationGenerator(verify_license=False)
         assert gen.device == "mps"
+
+
+def test_get_image_provider_default():
+    assert settings.get_image_provider() == "local"
+
+
+def test_get_image_provider_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_IMAGE_PROVIDER", "openrouter")
+    assert settings.get_image_provider() == "openrouter"
+
+
+def test_get_image_model_default():
+    assert settings.get_image_model() is None
+
+
+def test_get_image_model_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_IMAGE_MODEL", "custom/image-model")
+    assert settings.get_image_model() == "custom/image-model"

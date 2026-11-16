@@ -10,11 +10,10 @@ from PIL import Image
 
 from pageloom import settings
 from pageloom.consistency import ConsistencyGuard
-from pageloom.generator import IllustrationGenerator
 from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
-from pageloom.providers import ImageProvider
+from pageloom.providers import ImageProvider, build_image_provider
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
 
@@ -43,6 +42,8 @@ class Pipeline:
         example_image: str | Path | Image.Image,
         description: str = "",
         generator: ImageProvider | None = None,
+        provider: str | None = None,
+        model: str | None = None,
         compiler: PDFCompiler | None = None,
         page_structure: dict | None = None,
         vision_analyzer: object | None = None,
@@ -53,7 +54,9 @@ class Pipeline:
         self.prompt_builder = StylePromptBuilder(
             example_style=self.style,
         )
-        self.generator = generator or IllustrationGenerator()
+        # Resolve the image provider from the explicit `generator`, then the
+        # CLI/provider/model arguments, then the settings default (``local``).
+        self.generator = generator or build_image_provider(provider=provider, model=model)
         self.overlay = TextOverlay(style_profile=self.style)
         self.compiler = compiler or PDFCompiler()
         # Detect page structure for full structural routing through the pipeline.
