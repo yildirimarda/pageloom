@@ -10,7 +10,8 @@ from pageloom import settings
 from pageloom.content_generator import LLMContentGenerator
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pipeline import Pipeline
-from pageloom.providers import IMAGE_PROVIDER_MAP
+from pageloom.providers import IMAGE_PROVIDER_MAP, build_image_provider
+from pageloom.providers.size_negotiation import generate_fitting_slot
 from pageloom.vision import PageVisionAnalyzer, VisionAnalysisError
 
 # Default alphabet-style content list used when no explicit contents are given.
@@ -208,6 +209,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional example image path to test with; if omitted, a dummy image is used.",
     )
 
+    check_image_parser = subparsers.add_parser(
+        "check-image",
+        help="Smoke-test the image provider (generate one small image).",
+    )
+    check_image_parser.add_argument(
+        "--image-provider",
+        type=str,
+        default=None,
+        choices=list(IMAGE_PROVIDER_MAP),
+        help="Image provider to smoke-test (default: local, from PAGELOOM_IMAGE_PROVIDER).",
+    )
+    check_image_parser.add_argument(
+        "--image-model",
+        type=str,
+        default=None,
+        help="Image model id (default: provider default, from PAGELOOM_IMAGE_MODEL).",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -249,6 +268,35 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         except (ValueError, OSError) as exc:
             print(f"FAIL: Unexpected error during smoke test: {exc}", file=sys.stderr)
+            return 1
+
+    if args.command == "check-image":
+        try:
+            generator = build_image_provider(provider=args.image_provider, model=args.image_model)
+        except (ValueError, RuntimeError) as exc:
+            print(f"FAIL: Image provider setup failed: {exc}", file=sys.stderr)
+            return 1
+
+        print(f"Provider: {generator.provider_name}")
+        print(f"Model:    {generator.model_id}")
+
+        # One-shot smoke test: generate one small image through size
+        # negotiation, exactly like a real page generation.
+        from PIL import Image
+
+        try:
+            image = generate_fitting_slot(
+                generator,
+                prompt="A simple solid-color square for a provider smoke test.",
+                width=256,
+                height=256,
+            )
+            if not isinstance(image, Image.Image):
+                raise TypeError("Provider did not return a PIL image.")
+            print("Smoke test: PASS (one small image generated successfully)")
+            return 0
+        except Exception as exc:  # noqa: BLE001 - surface the exact failure
+            print(f"FAIL: Image smoke test failed: {exc}", file=sys.stderr)
             return 1
 
     if args.command != "generate":
