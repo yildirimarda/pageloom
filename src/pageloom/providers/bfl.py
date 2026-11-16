@@ -254,5 +254,9 @@ class BFLImageProvider:
         with urllib.request.urlopen(url, timeout=30) as resp:
             return Image.open(io.BytesIO(resp.read())).convert("RGB")
 
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        """Estimated USD cost for one generated image from the price table."""
+        return settings.image_price_usd("flux", self.model_id)
+
 
 __all__ = ["BFLImageProvider"]

@@ -114,5 +114,9 @@ class GeminiImageProvider:
             return Image.open(io.BytesIO(data)).convert("RGB")
         raise RuntimeError("Gemini image response contained no image data")
 
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        """Estimated USD cost for one generated image from the price table."""
+        return settings.image_price_usd("gemini", self.model_id)
+
 
 __all__ = ["GeminiImageProvider"]

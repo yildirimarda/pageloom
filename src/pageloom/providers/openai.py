@@ -123,5 +123,9 @@ class OpenAIImageProvider:
                 return Image.open(io.BytesIO(resp.read())).convert("RGB")
         raise RuntimeError("OpenAI image response contained no image data")
 
+    def estimated_cost_usd(self, width: int, height: int) -> float:
+        """Estimated USD cost for one generated image from the price table."""
+        return settings.image_price_usd("openai", self.model_id)
+
 
 __all__ = ["OpenAIImageProvider"]

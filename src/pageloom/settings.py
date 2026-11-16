@@ -146,3 +146,61 @@ def get_replicate_api_key() -> str | None:
     return (
         os.environ.get("REPLICATE_API_KEY") or os.environ.get("PAGELOOM_REPLICATE_API_KEY") or None
     )
+
+
+_DEFAULT_IMAGE_PRICE_TABLE: dict[str, dict[str, float]] = {
+    # Local Stable Diffusion runs on the user's own hardware: no per-image fee.
+    "local": {"default": 0.0},
+    # OpenAI Images API (gpt-image-2 / dall-e-3 family), per image.
+    "openai": {"gpt-image-2": 0.040, "dall-e-3": 0.080, "default": 0.040},
+    # Google Gemini Nano Banana family, per image.
+    "gemini": {"gemini-nano-banana-2.1": 0.030, "default": 0.030},
+    # OpenRouter image models: free auto-router costs nothing; paid models vary.
+    "openrouter": {"openrouter/free": 0.0, "openrouter/auto": 0.050, "default": 0.050},
+    # Black Forest Labs FLUX.2, per image.
+    "flux": {"flux-pro-1.1": 0.055, "default": 0.055},
+}
+
+
+def get_image_price_table() -> dict[str, dict[str, float]]:
+    """Configurable price table: estimated USD cost per generated image.
+
+    Returns a mapping ``{provider_name: {model_id: cost_usd, "default": ...}}``.
+    The table can be overridden wholesale with the ``PAGELOOM_IMAGE_PRICE_TABLE``
+    environment variable, which accepts either a JSON object or a path to a JSON
+    file containing one. Model-specific prices fall back to the entry's
+    ``"default"`` key, then to ``0.0`` when the model is unknown.
+    """
+    raw = os.environ.get("PAGELOOM_IMAGE_PRICE_TABLE")
+    if raw:
+        import json
+        from pathlib import Path
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            price_path = Path(raw)
+            if price_path.is_file():
+                return json.loads(price_path.read_text(encoding="utf-8"))
+    return _DEFAULT_IMAGE_PRICE_TABLE
+
+
+def image_price_usd(provider_name: str, model_id: str | None = None) -> float:
+    """Estimated USD cost for one image from ``provider_name`` / ``model_id``.
+
+    Looks the price up in the configurable price table (see
+    :func:`get_image_price_table`). Returns ``0.0`` for providers not in the
+    table (e.g. local generation) or for unknown models.
+    """
+    table = get_image_price_table()
+    entry = table.get(provider_name)
+    if entry is None:
+        return 0.0
+    if isinstance(entry, (int, float)):
+        return float(entry)
+    if isinstance(entry, dict):
+        if model_id and model_id in entry:
+            return float(entry[model_id])
+        if "default" in entry:
+            return float(entry["default"])
+    return 0.0
