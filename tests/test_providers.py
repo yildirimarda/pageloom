@@ -1,9 +1,11 @@
 """Tests for the pluggable ImageProvider interface and capabilities record."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from PIL import Image
 
-from pageloom.providers import ImageProvider, ImageProviderCapabilities
+from pageloom.providers import ImageProvider, ImageProviderCapabilities, LocalDiffusersProvider
 
 
 class FakeProvider:
@@ -121,3 +123,54 @@ def test_fake_provider_respects_capabilities_max_references():
     assert provider.capabilities.max_reference_images == 3
     assert provider.capabilities.supports_edit is True
     assert provider.capabilities.supports_negative_prompt is True
+
+
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.providers.local_diffusers.torch.cuda.is_available", return_value=False)
+@patch("pageloom.providers.local_diffusers.torch.backends.mps.is_available", return_value=False)
+def test_local_diffusers_provider_is_an_image_provider(mock_mps, mock_cuda, mock_from_pretrained):
+    """LocalDiffusersProvider must satisfy the ImageProvider protocol."""
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_from_pretrained.return_value = mock_pipeline
+
+    provider = LocalDiffusersProvider(verify_license=False)
+    assert isinstance(provider, ImageProvider)
+    assert provider.capabilities.max_reference_images == 0
+    assert provider.capabilities.supports_negative_prompt is True
+    assert provider.capabilities.supports_edit is False
+
+
+@patch("pageloom.providers.local_diffusers.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.providers.local_diffusers.torch.cuda.is_available", return_value=False)
+@patch("pageloom.providers.local_diffusers.torch.backends.mps.is_available", return_value=False)
+def test_local_diffusers_provider_generate_conforms_to_interface(
+    mock_mps, mock_cuda, mock_from_pretrained
+):
+    """generate() takes the ImageProvider arguments and returns a PIL image."""
+    from PIL import Image
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_image = Image.new("RGB", (512, 512), color="red")
+    mock_pipeline.return_value = MagicMock(images=[mock_image])
+    mock_from_pretrained.return_value = mock_pipeline
+
+    provider = LocalDiffusersProvider(verify_license=False)
+    result = provider.generate(
+        "a red apple",
+        width=512,
+        height=512,
+        references=["ref.png"],
+        negative_prompt="blurry",
+        seed=7,
+    )
+    assert isinstance(result, Image.Image)
+    assert result.size == (512, 512)
+
+    kwargs = mock_pipeline.call_args.kwargs
+    assert kwargs["prompt"] == "a red apple"
+    assert kwargs["negative_prompt"] == "blurry"
+    assert kwargs["width"] == 512
+    assert kwargs["height"] == 512
+    assert kwargs["generator"] is not None

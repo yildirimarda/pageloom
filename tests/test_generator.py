@@ -393,3 +393,25 @@ def test_generate_propagates_unrelated_value_error():
         assert "prompt_embeds" in str(exc)
     else:
         raise AssertionError("expected ValueError to propagate")
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_illustration_generator_is_thin_alias_over_local_diffusers_provider(
+    mock_mps, mock_cuda, mock_from_pretrained
+):
+    """IllustrationGenerator is LocalDiffusersProvider behind the ImageProvider interface."""
+    from pageloom.generator import IllustrationGenerator
+    from pageloom.providers import ImageProvider
+    from pageloom.providers.local_diffusers import LocalDiffusersProvider
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_from_pretrained.return_value = mock_pipeline
+
+    assert issubclass(IllustrationGenerator, LocalDiffusersProvider)
+    gen = IllustrationGenerator(verify_license=False)
+    assert isinstance(gen, ImageProvider)
+    # The SD-specific helpers live on the provider and are still reachable.
+    assert IllustrationGenerator._round_to_multiple_8(618) == 624

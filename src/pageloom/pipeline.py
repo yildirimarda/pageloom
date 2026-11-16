@@ -14,6 +14,7 @@ from pageloom.generator import IllustrationGenerator
 from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
+from pageloom.providers import ImageProvider
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
 
@@ -41,7 +42,7 @@ class Pipeline:
         self,
         example_image: str | Path | Image.Image,
         description: str = "",
-        generator: IllustrationGenerator | None = None,
+        generator: ImageProvider | None = None,
         compiler: PDFCompiler | None = None,
         page_structure: dict | None = None,
         vision_analyzer: object | None = None,

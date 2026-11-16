@@ -6,6 +6,7 @@ from PIL import Image
 
 from pageloom.consistency import ConsistencyGuard
 from pageloom.pipeline import Pipeline, round_to_multiple
+from pageloom.providers import ImageProvider, ImageProviderCapabilities
 
 
 def test_round_to_multiple_returns_multiple_of_8():
@@ -385,3 +386,34 @@ def test_pipeline_verify_consistency_default_is_true(tmp_path: Path):
     Image.new("RGB", (512, 512), color="purple").save(img_path)
     pipeline = Pipeline(example_image=str(img_path), generator=MagicMock())
     assert pipeline.verify_consistency is True
+
+
+def test_pipeline_depends_only_on_image_provider_interface(tmp_path: Path):
+    """Pipeline.run() must work with any ImageProvider, not just the SD backend."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (612, 612), color="blue").save(img_path)
+
+    class StubProvider:
+        capabilities = ImageProviderCapabilities(
+            max_reference_images=1, supports_negative_prompt=True
+        )
+
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        def generate(
+            self,
+            prompt: str,
+            width: int,
+            height: int,
+            references: list[str | Image.Image] | None = None,
+            negative_prompt: str | None = None,
+            seed: int | None = None,
+        ) -> Image.Image:
+            self.calls.append({"prompt": prompt, "width": width, "height": height})
+            return Image.new("RGB", (width, height), color="green")
+
+    assert isinstance(StubProvider(), ImageProvider)
+    provider = StubProvider()
+    pipeline = Pipeline(example_image=str(img_path), generator=provider)
+    assert pipeline.generator is provider
