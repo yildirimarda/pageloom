@@ -1,6 +1,7 @@
 """Tests for environment-variable overrides in pageloom settings."""
 
 from unittest.mock import MagicMock, patch
+from urllib.error import URLError
 
 from pageloom import settings
 
@@ -172,6 +173,17 @@ def test_get_openrouter_vision_model_default():
 def test_get_openrouter_vision_model_env_takes_precedence_over_discovery(monkeypatch):
     monkeypatch.setenv("OPENROUTER_VISION_MODEL", "some/vision-model:free")
     assert settings.get_openrouter_vision_model() == "some/vision-model:free"
+
+
+def test_get_openrouter_vision_model_falls_back_to_free_router_on_discovery_failure(monkeypatch):
+    """If the models endpoint is unreachable or malformed, fall back to
+    ``openrouter/free`` instead of failing the whole run."""
+
+    def _raise(_req, *args, **kwargs):
+        raise URLError("unreachable")
+
+    with patch("pageloom.providers.openrouter.urllib.request.urlopen", side_effect=_raise):
+        assert settings.get_openrouter_vision_model() == "openrouter/free"
 
 
 def test_get_openrouter_vision_model_from_env(monkeypatch):
