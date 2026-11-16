@@ -6,7 +6,21 @@ import os
 
 
 def get_model_id() -> str:
+    """Default Stable Diffusion model id.
+
+    The model id is configuration: it is read from settings/env and never
+    hardcoded beyond this default. Override with ``PAGELOOM_MODEL_ID``.
+    """
     return os.environ.get("PAGELOOM_MODEL_ID", "runwayml/stable-diffusion-v1-5")
+
+
+def get_profile() -> str:
+    """Generation profile: ``fast`` (fewer inference steps, quick previews) or
+    ``quality`` (production defaults: 25-30 steps, guidance ~7).
+
+    Override with the ``PAGELOOM_PROFILE`` environment variable.
+    """
+    return os.environ.get("PAGELOOM_PROFILE", "quality")
 
 
 def get_device() -> str | None:
@@ -110,29 +124,35 @@ def get_num_inference_steps() -> int:
 
     These settings are what make a local Stable Diffusion run capable of
     producing a real, usable image rather than noise. Override with the
-    ``PAGELOOM_SD_STEPS`` environment variable.
+    ``PAGELOOM_SD_STEPS`` environment variable. The ``fast`` profile defaults
+    to 6 steps for quick previews; ``quality`` defaults to 25.
     """
     raw = os.environ.get("PAGELOOM_SD_STEPS")
     if raw is None or raw.strip() == "":
+        if get_profile() == "fast":
+            return 6
         return 25
     try:
         return max(1, int(raw))
     except ValueError:
-        return 25
+        return 6 if get_profile() == "fast" else 25
 
 
 def get_guidance_scale() -> float:
     """Production default classifier-free guidance scale (around 7).
 
     Override with the ``PAGELOOM_SD_GUIDANCE_SCALE`` environment variable.
+    The ``fast`` profile defaults to 5.0; ``quality`` defaults to 7.5.
     """
     raw = os.environ.get("PAGELOOM_SD_GUIDANCE_SCALE")
     if raw is None or raw.strip() == "":
+        if get_profile() == "fast":
+            return 5.0
         return 7.5
     try:
         return float(raw)
     except ValueError:
-        return 7.5
+        return 5.0 if get_profile() == "fast" else 7.5
 
 
 def get_flux_host() -> str:

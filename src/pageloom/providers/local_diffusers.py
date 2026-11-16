@@ -124,7 +124,10 @@ class LocalDiffusersProvider:
             )
         except Exception as exc:
             raise RuntimeError(
-                f"Failed to load Stable Diffusion model '{self.model_id}': {exc}"
+                f"Failed to download/load Stable Diffusion model '{self.model_id}'. "
+                f"Check the model id (overridable with PAGELOOM_MODEL_ID or "
+                f"--image-model) and your network connection. "
+                f"Underlying error: {exc}"
             ) from exc
         self.pipeline = self.pipeline.to(self.device)
         # Attention slicing enabled consistently for lower memory usage

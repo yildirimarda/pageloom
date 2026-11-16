@@ -228,7 +228,7 @@ def test_illustration_generator_init_model_load_failure(mock_mps, mock_cuda, moc
         IllustrationGenerator()
         assert False, "Expected RuntimeError"
     except RuntimeError as exc:
-        assert "Failed to load Stable Diffusion model" in str(exc)
+        assert "Failed to download/load Stable Diffusion model" in str(exc)
         assert "model not found" in str(exc)
 
 
@@ -456,6 +456,42 @@ def test_generate_respects_explicit_steps_and_guidance():
     captured = _capture_pipeline_call(gen, num_inference_steps=30, guidance_scale=7)
     assert captured.get("num_inference_steps") == 30
     assert captured.get("guidance_scale") == 7
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_provider_fast_profile_uses_fewer_steps(
+    mock_mps, mock_cuda, mock_from_pretrained, monkeypatch
+):
+    """The fast profile (PAGELOOM_PROFILE=fast) defaults to 6 steps / guidance 5."""
+    monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    gen = IllustrationGenerator(verify_license=False)
+    assert gen.num_inference_steps == 6
+    assert gen.guidance_scale == 5.0
+
+
+@patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")
+@patch("pageloom.generator.torch.cuda.is_available", return_value=False)
+@patch("pageloom.generator.torch.backends.mps.is_available", return_value=False)
+def test_provider_quality_profile_uses_production_defaults(
+    mock_mps, mock_cuda, mock_from_pretrained, monkeypatch
+):
+    """The quality profile (PAGELOOM_PROFILE=quality) defaults to 25 steps / guidance 7.5."""
+    monkeypatch.setenv("PAGELOOM_PROFILE", "quality")
+    mock_pipeline = MagicMock()
+    mock_pipeline.to.side_effect = lambda device: mock_pipeline
+    mock_from_pretrained.return_value = mock_pipeline
+    from pageloom.generator import IllustrationGenerator
+
+    gen = IllustrationGenerator(verify_license=False)
+    assert gen.num_inference_steps == 25
+    assert gen.guidance_scale == 7.5
 
 
 @patch("pageloom.generator.StableDiffusionPipeline.from_pretrained")

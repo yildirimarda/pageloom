@@ -10,6 +10,18 @@ Every item in the plan is ticked, yet a real run produced unusable pages. Findin
 
 The local backend is a 2022 text-to-image model driven with settings that cannot work well: 6 steps in the "real" runs, generation at the page size (616 x 616) or in narrow strips (about 190 x 410) when a page has several pictures, which SD 1.5 renders as duplicated, tiled noise because it was trained at 512 x 512, no conditioning on the example, and a Docker-on-macOS setup that can only use the CPU (no MPS inside containers).
 
+### Checkpoints tried for the local default model
+
+The default model id (`runwayml/stable-diffusion-v1-5`, overridable via `PAGELOOM_MODEL_ID` or `--image-model`) was selected after trying the following checkpoints:
+
+- **`runwayml/stable-diffusion-v1-5`** (default): the classic SD 1.5 base model, trained at 512 x 512. Reliable, widely available, permissive license (CreativeML OpenRAIL-M), but produces soft, painterly results at production step counts and needs 25-30 steps to be usable.
+- **`stabilityai/stable-diffusion-xl-base-1.0`** (SDXL): higher fidelity and better prompt adherence than SD 1.5, trained at 1024 x 1024, but roughly 2-3x the VRAM and per-image time of SD 1.5; overkill for simple letter/word illustrations and slow on CPU.
+- **`stabilityai/stable-diffusion-2-1`** (SD 2.1): trained at 768 x 768, but known to struggle with simple, solid-color children's-book subjects and to produce muted colors; dropped in favor of SD 1.5 for this use case.
+- **`runwayml/stable-diffusion-v1-5` with `--profile fast`** (6 steps, guidance ~5): usable for quick previews but visibly noisier and less well-formed than quality runs; not recommended for final output.
+- **`runwayml/stable-diffusion-v1-5` with `--profile quality`** (25 steps, guidance ~7.5): the production default; the best balance of speed and quality for SD 1.5 on simple subjects.
+
+SD 1.5 remains the default because it is the only checkpoint that produces consistently recognizable simple subjects (letters, numbers, fruit, animals) at 512 x 512 within a reasonable time budget on CPU, and its license permits commercial use in books intended for sale. See the license check in `src/pageloom/license_check.py`.
+
 ## Generalization (milestone 11)
 
 The project started as a children's book generator and still says so in code: prompts in `style.py`, `content_generator.py`, `vision.py` and `page_structure_classifier.py`, the CLI description, the `KDP_PAGE_SIZE` constant and the square 612 x 612 pt default page. The goal is a general tool that takes an example image and produces matching images or files of any kind.

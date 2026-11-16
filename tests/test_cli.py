@@ -1,8 +1,10 @@
 """Tests for the pageloom CLI entrypoint."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from PIL import Image
 
 from pageloom.cli import DEFAULT_CONTENTS, main
@@ -115,6 +117,62 @@ def test_cli_quick_flag_skips_verification_and_uses_low_steps(tmp_path: Path):
 
         # --quick drops to a low step count (rough preview), not the production default.
         assert mock_instance.generator.num_inference_steps == 6
+
+
+def test_cli_profile_fast_and_quality_are_accepted(tmp_path: Path):
+    """`--profile fast` and `--profile quality` are accepted on the generate path."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=_DEFAULT_VISION_STRUCTURE),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        for profile in ("fast", "quality"):
+            result = main(
+                [
+                    "generate",
+                    "--pages",
+                    "2",
+                    "--example",
+                    str(img_path),
+                    "--output",
+                    str(tmp_path / "out.pdf"),
+                    "--profile",
+                    profile,
+                ]
+            )
+            assert result == 0
+
+        # --profile is applied (restored afterwards so it does not leak to
+        # other tests): PAGELOOM_PROFILE must not remain set after main() returns.
+        assert "PAGELOOM_PROFILE" not in os.environ
+
+
+def test_cli_profile_invalid_is_rejected(tmp_path: Path):
+    """An invalid `--profile` value is rejected by argparse."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--profile",
+                "bogus",
+            ]
+        )
+    assert exc_info.value.code == 2
 
 
 def test_cli_pages_less_than_one():

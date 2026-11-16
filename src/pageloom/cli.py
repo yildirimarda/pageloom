@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -202,6 +203,18 @@ def main(argv: list[str] | None = None) -> int:
             "float16 on CUDA/MPS, guidance ~7)."
         ),
     )
+    generate_parser.add_argument(
+        "--profile",
+        type=str,
+        default=None,
+        choices=["fast", "quality"],
+        help=(
+            "Generation profile: 'fast' uses fewer inference steps for quick "
+            "previews (6 steps, guidance ~5); 'quality' uses the production "
+            "defaults (25-30 steps, guidance ~7). Defaults to 'quality' "
+            "(overridable with PAGELOOM_PROFILE)."
+        ),
+    )
 
     check_vision_parser = subparsers.add_parser(
         "check-vision",
@@ -320,121 +333,134 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: --pages must be at least 1.", file=sys.stderr)
         return 1
 
-    # Automatic vision analysis is the default way to detect page structure: it
-    # looks at the example image itself, so it works for ANY page type (numbers,
-    # letters, word-image matching, etc.) without the user writing a description.
-    # An explicit --description is treated as an override that skips the (network)
-    # vision call; --no-vision opts out entirely in favor of the old heuristic.
-    vision_analyzer = None
-    if not args.no_vision and not args.description:
-        try:
-            vision_analyzer = PageVisionAnalyzer(provider=args.vision_provider)
-        except (ValueError, VisionAnalysisError) as exc:
-            print(
-                f"Warning: automatic vision analysis unavailable ({exc}); "
-                f"falling back to image-size heuristics. Pass --description to "
-                f"improve accuracy, or set up a free OpenRouter key (see README).",
-                file=sys.stderr,
-            )
-
-    # Detect page structure from the example image (plus optional description)
-    # to route LLM content correctly.
-    page_structure = None
+    # Apply --profile for this run (overrides PAGELOOM_PROFILE), restoring
+    # afterwards so the setting does not leak beyond this process invocation.
+    _prev_profile = os.environ.get("PAGELOOM_PROFILE")
+    if args.profile is not None:
+        os.environ["PAGELOOM_PROFILE"] = args.profile
     try:
-        page_structure = detect_structure(
-            source=args.example, description=args.description, vision_analyzer=vision_analyzer
-        )
-    except (ValueError, OSError, FileNotFoundError):
-        # If classification fails, fall back to generic single-letter-word structure
-        page_structure = {
-            "content_pattern": "single_letter_word_illustration",
-            "element_count": 1,
-            "arrangement": "centered",
-            "text_image_relationship": "label_per_image",
-        }
+        # Automatic vision analysis is the default way to detect page structure: it
+        # looks at the example image itself, so it works for ANY page type (numbers,
+        # letters, word-image matching, etc.) without the user writing a description.
+        # An explicit --description is treated as an override that skips the (network)
+        # vision call; --no-vision opts out entirely in favor of the old heuristic.
+        vision_analyzer = None
+        if not args.no_vision and not args.description:
+            try:
+                vision_analyzer = PageVisionAnalyzer(provider=args.vision_provider)
+            except (ValueError, VisionAnalysisError) as exc:
+                print(
+                    f"Warning: automatic vision analysis unavailable ({exc}); "
+                    f"falling back to image-size heuristics. Pass --description to "
+                    f"improve accuracy, or set up a free OpenRouter key (see README).",
+                    file=sys.stderr,
+                )
 
-    # --estimate: print the expected cost for the run without calling any image
-    # provider, then exit. The price table (PAGELOOM_IMAGE_PRICE_TABLE) and the
-    # detected page structure determine the per-image cost.
-    if args.estimate:
-        estimate_pipeline = Pipeline(
+        # Detect page structure from the example image (plus optional description)
+        # to route LLM content correctly.
+        page_structure = None
+        try:
+            page_structure = detect_structure(
+                source=args.example, description=args.description, vision_analyzer=vision_analyzer
+            )
+        except (ValueError, OSError, FileNotFoundError):
+            # If classification fails, fall back to generic single-letter-word structure
+            page_structure = {
+                "content_pattern": "single_letter_word_illustration",
+                "element_count": 1,
+                "arrangement": "centered",
+                "text_image_relationship": "label_per_image",
+            }
+
+        # --estimate: print the expected cost for the run without calling any image
+        # provider, then exit. The price table (PAGELOOM_IMAGE_PRICE_TABLE) and the
+        # detected page structure determine the per-image cost.
+        if args.estimate:
+            estimate_pipeline = Pipeline(
+                example_image=args.example,
+                description=args.description,
+                provider=args.image_provider,
+                model=args.image_model,
+                page_structure=page_structure,
+                verify_consistency=False,
+            )
+            estimate = estimate_pipeline.estimated_total_cost_usd(pages_value)
+            print(f"Estimated cost: ${estimate:.2f} for {pages_value} page(s)")
+            return 0
+
+        # Determine available content based on detected page structure.
+        # Only alphabet-style pages have a fixed built-in content list.
+        content_pattern = page_structure.get("content_pattern", "single_letter_word_illustration")
+        if content_pattern == "single_letter_word_illustration":
+            built_in_contents = DEFAULT_CONTENTS
+            built_in_limit = len(DEFAULT_CONTENTS)
+        else:
+            # Non-alphabet structures (object_name_pair, multi_item_scene,
+            # etc.) have no fixed built-in content list.
+            built_in_contents = []
+            built_in_limit = 0
+
+        # The LLM generator should trigger whenever N exceeds whatever content
+        # items are explicitly available for the detected structure -- not a
+        # hardcoded 26-letter boundary that only applies to the legacy alphabet
+        # list.
+        use_llm = args.use_llm
+        if pages_value > built_in_limit:
+            if not use_llm:
+                print(
+                    f"Error: --pages ({pages_value}) exceeds available content "
+                    f"({built_in_limit} items). Use --use-llm to generate extra content.",
+                    file=sys.stderr,
+                )
+                return 1
+            contents = built_in_contents[:built_in_limit]
+            try:
+                llm_gen = LLMContentGenerator(provider=args.llm_provider)
+                extra = llm_gen.generate(
+                    pages_value - built_in_limit, page_structure=page_structure
+                )
+                contents.extend(extra)
+            except RuntimeError as exc:
+                print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
+                return 1
+        else:
+            contents = built_in_contents[:pages_value]
+
+        pipeline = Pipeline(
             example_image=args.example,
             description=args.description,
             provider=args.image_provider,
             model=args.image_model,
             page_structure=page_structure,
-            verify_consistency=False,
+            # Same analyzer used to classify the example: Pipeline forwards it to
+            # ConsistencyGuard so generated pages are re-classified with the same
+            # method (vision or heuristic) during the automatic consistency check.
+            vision_analyzer=vision_analyzer,
+            # --no-consistency opts out of that check entirely (no guard runs and
+            # no `Consistency check:` report). --quick is low quality and is never
+            # used for verification, so it also skips the consistency check.
+            verify_consistency=not args.no_consistency and not args.quick,
+            # --max-cost caps total estimated spend; the run stops before exceeding it.
+            max_cost_usd=args.max_cost,
         )
-        estimate = estimate_pipeline.estimated_total_cost_usd(pages_value)
-        print(f"Estimated cost: ${estimate:.2f} for {pages_value} page(s)")
+        if args.quick:
+            # Quick mode is low quality: drop to a rough-preview step count. The
+            # production defaults (25-30 steps) are used for real runs.
+            pipeline.generator.num_inference_steps = 6
+
+        result = pipeline.run(
+            contents=contents,
+            output_path=args.output,
+            page_format=args.format,
+            force=args.force,
+        )
+        print(f"Generated {len(contents)} page(s) -> {result}")
         return 0
-
-    # Determine available content based on detected page structure.
-    # Only alphabet-style pages have a fixed built-in content list.
-    content_pattern = page_structure.get("content_pattern", "single_letter_word_illustration")
-    if content_pattern == "single_letter_word_illustration":
-        built_in_contents = DEFAULT_CONTENTS
-        built_in_limit = len(DEFAULT_CONTENTS)
-    else:
-        # Non-alphabet structures (object_name_pair, multi_item_scene,
-        # etc.) have no fixed built-in content list.
-        built_in_contents = []
-        built_in_limit = 0
-
-    # The LLM generator should trigger whenever N exceeds whatever content
-    # items are explicitly available for the detected structure -- not a
-    # hardcoded 26-letter boundary that only applies to the legacy alphabet
-    # list.
-    use_llm = args.use_llm
-    if pages_value > built_in_limit:
-        if not use_llm:
-            print(
-                f"Error: --pages ({pages_value}) exceeds available content "
-                f"({built_in_limit} items). Use --use-llm to generate extra content.",
-                file=sys.stderr,
-            )
-            return 1
-        contents = built_in_contents[:built_in_limit]
-        try:
-            llm_gen = LLMContentGenerator(provider=args.llm_provider)
-            extra = llm_gen.generate(pages_value - built_in_limit, page_structure=page_structure)
-            contents.extend(extra)
-        except RuntimeError as exc:
-            print(f"Error: LLM content generation failed: {exc}", file=sys.stderr)
-            return 1
-    else:
-        contents = built_in_contents[:pages_value]
-
-    pipeline = Pipeline(
-        example_image=args.example,
-        description=args.description,
-        provider=args.image_provider,
-        model=args.image_model,
-        page_structure=page_structure,
-        # Same analyzer used to classify the example: Pipeline forwards it to
-        # ConsistencyGuard so generated pages are re-classified with the same
-        # method (vision or heuristic) during the automatic consistency check.
-        vision_analyzer=vision_analyzer,
-        # --no-consistency opts out of that check entirely (no guard runs and
-        # no `Consistency check:` report). --quick is low quality and is never
-        # used for verification, so it also skips the consistency check.
-        verify_consistency=not args.no_consistency and not args.quick,
-        # --max-cost caps total estimated spend; the run stops before exceeding it.
-        max_cost_usd=args.max_cost,
-    )
-    if args.quick:
-        # Quick mode is low quality: drop to a rough-preview step count. The
-        # production defaults (25-30 steps) are used for real runs.
-        pipeline.generator.num_inference_steps = 6
-
-    result = pipeline.run(
-        contents=contents,
-        output_path=args.output,
-        page_format=args.format,
-        force=args.force,
-    )
-    print(f"Generated {len(contents)} page(s) -> {result}")
-    return 0
+    finally:
+        if _prev_profile is None:
+            os.environ.pop("PAGELOOM_PROFILE", None)
+        else:
+            os.environ["PAGELOOM_PROFILE"] = _prev_profile
 
 
 if __name__ == "__main__":
