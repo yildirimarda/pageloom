@@ -84,6 +84,22 @@ def get_image_provider() -> str:
     return os.environ.get("PAGELOOM_IMAGE_PROVIDER", "local")
 
 
+def get_quality_gate_max_retries() -> int:
+    """Max cheap-heuristic retries with a fresh seed before a frame is rejected.
+
+    Each rejected frame is regenerated once with a new seed, up to this many
+    retries. Set ``PAGELOOM_QUALITY_GATE_MAX_RETRIES=0`` to disable retries
+    (the first bad frame is rejected immediately).
+    """
+    raw = os.environ.get("PAGELOOM_QUALITY_GATE_MAX_RETRIES")
+    if raw is None or raw.strip() == "":
+        return 2
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 2
+
+
 def get_image_model() -> str | None:
     """Explicit image model id, or ``None`` to let the provider pick its default.
 

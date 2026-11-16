@@ -23,6 +23,13 @@ from pageloom.providers import (
 )
 
 
+def _passing_image(width: int, height: int) -> Image.Image:
+    """A non-uniform illustration that passes the automatic quality gate."""
+    img = Image.new("L", (width, height))
+    img.putdata([int(255 * x / max(1, width - 1)) for y in range(height) for x in range(width)])
+    return img.convert("RGB")
+
+
 class _CostProvider:
     """Fake provider with a fixed per-image cost and a call log."""
 
@@ -50,7 +57,7 @@ class _CostProvider:
         seed: int | None = None,
     ) -> Image.Image:
         self.calls.append({"prompt": prompt, "width": width, "height": height})
-        return Image.new("RGB", (width, height), color="red")
+        return _passing_image(width, height)
 
     def estimated_cost_usd(self, width: int, height: int) -> float:
         return self.cost_usd

@@ -15,8 +15,10 @@ from pageloom.page_structure_classifier import detect_structure
 from pageloom.pdf_compiler import PDFCompiler
 from pageloom.providers import ImageProvider, ImageProviderCapabilities, build_image_provider
 from pageloom.providers.size_negotiation import generate_fitting_slot, negotiate_size
+from pageloom.quality_gate import QualityGateError, quality_gate_reasons
 from pageloom.style import StylePromptBuilder
 from pageloom.style_extractor import VisualStyleExtractor
+from pageloom.vision import PageVisionAnalyzer
 
 
 def round_to_multiple(dim: int, base: int = 8) -> int:
@@ -50,6 +52,7 @@ class Pipeline:
         vision_analyzer: object | None = None,
         verify_consistency: bool = True,
         max_cost_usd: float | None = None,
+        quality_gate_max_retries: int | None = None,
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
@@ -102,6 +105,13 @@ class Pipeline:
         self.max_cost_usd = max_cost_usd
         self.total_cost_usd = 0.0
         self.budget_stopped = False
+        # Quality gate: cheap-heuristic retries with a fresh seed before a
+        # frame is rejected. ``None`` falls back to the setting.
+        self.quality_gate_max_retries = (
+            settings.get_quality_gate_max_retries()
+            if quality_gate_max_retries is None
+            else quality_gate_max_retries
+        )
         # The first accepted generated page becomes a style reference for
         # subsequent pages when the provider supports reference images.
         self._first_generated_page: Image.Image | None = None
@@ -134,6 +144,77 @@ class Pipeline:
         )
         per_image = self.generator.estimated_cost_usd(width, height)
         return num_pages * images_per_page * per_image
+
+    def _generate_accepted_image(
+        self,
+        generator,
+        prompt: str,
+        width: int,
+        height: int,
+        content: str,
+        references: list[str | Image.Image] | None = None,
+    ) -> Image.Image:
+        """Generate one image through the quality gate.
+
+        The image is rejected (and regenerated with a fresh seed) when any cheap
+        heuristic flags it, or when the optional vision subject check denies the
+        requested ``content``. Retries happen up to ``quality_gate_max_retries``
+        times; a frame that never passes raises :class:`QualityGateError` so it
+        is never written into the PDF.
+        """
+        max_retries = int(self.quality_gate_max_retries)
+        last_image: Image.Image | None = None
+        last_reasons: list[str] = []
+        for attempt in range(max_retries + 1):
+            attempt_seed = None  # each attempt is a fresh random draw
+            image = generate_fitting_slot(
+                generator,
+                prompt=prompt,
+                width=width,
+                height=height,
+                references=references,
+                seed=attempt_seed,
+            )
+            reasons = quality_gate_reasons(image)
+            if not reasons:
+                if self._subject_present(image, content):
+                    return image
+                # The cheap heuristics passed but the vision model denies the
+                # requested subject: treat that as a failure reason and retry.
+                reasons.append("subject not present")
+            last_image = image
+            last_reasons = reasons
+            if attempt < max_retries:
+                print(
+                    f"Warning: image failed quality gate ({', '.join(reasons)}); "
+                    f"retrying ({attempt + 1}/{max_retries}) with a new seed.",
+                    file=sys.stderr,
+                )
+                continue
+        raise QualityGateError(last_reasons, image=last_image)
+
+    def _subject_present(self, image: Image.Image, content: str) -> bool:
+        """Optionally ask the vision model whether ``content``'s subject is visible.
+
+        Returns True (no check applied) when no vision analyser is configured,
+        so offline runs are unaffected.
+        """
+        if self.vision_analyzer is None:
+            return True
+        provider = getattr(self.vision_analyzer, "provider", None)
+        if provider is None or not hasattr(provider, "generate_vision_content"):
+            # A stub analyser (e.g. one that only implements `analyze()`) cannot
+            # answer subject questions, so skip the optional subject check.
+            return True
+        data_url = PageVisionAnalyzer._encode_image(image)
+        prompt = f"Is the subject '{content}' present in this image? Answer yes or no."
+        raw = provider.generate_vision_content(
+            prompt=prompt,
+            image_data_url=data_url,
+            max_tokens=8,
+            temperature=0.2,
+        )
+        return raw.strip().lower().startswith("y")
 
     def run(
         self,
@@ -236,11 +317,12 @@ class Pipeline:
                     ):
                         self.budget_stopped = True
                         break
-                    sub_image = generate_fitting_slot(
+                    sub_image = self._generate_accepted_image(
                         self.generator,
                         prompt=sub_prompt,
                         width=round_to_multiple(sub_w),
                         height=round_to_multiple(sub_h),
+                        content=label_content,
                     )
                     sub_images.append(sub_image)
                     self.total_cost_usd += sub_image_cost
@@ -345,12 +427,18 @@ class Pipeline:
                 ):
                     self.budget_stopped = True
                     break
-                image = generate_fitting_slot(
+                # Generate with the automatic quality gate: reject near-black,
+                # near-uniform, tiled or noise-like frames, optionally confirm
+                # the requested subject with the vision model, and retry with a
+                # new seed up to the configured limit. A frame that never
+                # passes is reported as a failure and never written to the PDF.
+                image = self._generate_accepted_image(
                     self.generator,
                     prompt=prompt,
                     width=int(width),
                     height=int(height),
                     references=references,
+                    content=content,
                 )
                 image.save(str(cache_path), "PNG")
                 self.total_cost_usd += image_cost
