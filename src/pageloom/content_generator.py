@@ -59,13 +59,35 @@ def _retry_with_backoff(
 def _classify_provider_error(exc: Exception, provider_name: str) -> str:
     """Map a raw SDK exception to a clear, provider-labeled error message."""
     exc_name = exc.__class__.__name__
-    if "RateLimit" in exc_name:
+    msg = str(exc)
+    lowered = msg.lower()
+    if "RateLimit" in exc_name or "429" in lowered:
         return f"LLM provider '{provider_name}' rate limit exceeded."
-    if "Timeout" in exc_name or "APITimeout" in exc_name:
+    if (
+        "ContentPolicy" in exc_name
+        or "Moderation" in exc_name
+        or "content policy" in lowered
+        or "content_policy" in lowered
+        or "content_policy_violation" in lowered
+        or "refusal" in lowered
+        or "refused" in lowered
+        or "moderation" in lowered
+        or "safety policy" in lowered
+        or "policy violation" in lowered
+    ):
+        return f"LLM provider '{provider_name}' refused the request (content policy). {msg}"
+    if "Timeout" in exc_name or "APITimeout" in exc_name or "timeout" in lowered:
         return f"LLM provider '{provider_name}' request timed out."
-    if "Authentication" in exc_name or "APIKey" in exc_name or "InvalidKey" in exc_name:
+    if (
+        "Authentication" in exc_name
+        or "APIKey" in exc_name
+        or "InvalidKey" in exc_name
+        or "authentication" in lowered
+        or "invalid key" in lowered
+        or "api key" in lowered
+    ):
         return f"LLM provider '{provider_name}' invalid or missing API key."
-    return f"LLM provider '{provider_name}' API call failed: {exc}"
+    return f"LLM provider '{provider_name}' API call failed: {msg}"
 
 
 def _parse_data_url(data_url: str) -> tuple[str, str, str]:

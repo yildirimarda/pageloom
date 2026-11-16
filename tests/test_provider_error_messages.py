@@ -86,6 +86,26 @@ def test_all_three_providers_pass_readable_name_to_classify():
         assert cls.__name__ not in msg
 
 
+def test_classify_provider_error_content_policy_refusal():
+    """Content-policy refusals get a clear, provider-labeled message."""
+
+    class ContentPolicyViolationError(Exception):
+        pass
+
+    msg = _classify_provider_error(
+        ContentPolicyViolationError("This request was refused due to content policy."), "openrouter"
+    )
+    assert msg.startswith("LLM provider 'openrouter' refused the request (content policy).")
+    assert "This request was refused due to content policy." in msg
+    assert "OpenRouterProvider" not in msg
+
+    # Same condition through each provider reads as the readable label.
+    for label in ("openai", "anthropic", "openrouter"):
+        msg = _classify_provider_error(ContentPolicyViolationError("content policy refusal"), label)
+        assert msg.startswith(f"LLM provider '{label}' refused the request (content policy).")
+        assert f"{label.capitalize()}Provider" not in msg
+
+
 def test_vision_model_reject_image_falls_back_gracefully_for_each_provider():
     """Simulate 'model does not support images' for all three providers and
     confirm the user-facing string contains the readable provider name."""

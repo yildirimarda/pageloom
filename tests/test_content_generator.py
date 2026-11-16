@@ -353,6 +353,63 @@ def test_llm_api_invalid_key_raises_clear_error():
         sys.modules.update(original_modules)
 
 
+def test_llm_api_content_policy_refusal_raises_clear_error():
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+
+    class ContentPolicyViolationError(Exception):
+        pass
+
+    mock_client.chat.completions.create.side_effect = ContentPolicyViolationError(
+        "This request was refused due to content policy."
+    )
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with pytest.raises(RuntimeError, match="content policy"):
+            gen.generate(2)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+
+
+def test_llm_api_content_policy_refusal_not_retried():
+    """Content-policy refusals are permanent: they must not be retried."""
+    gen = LLMContentGenerator(api_key="test-key")
+    mock_openai_module = MagicMock()
+    mock_client = MagicMock()
+
+    call_count = 0
+
+    class ContentPolicyError(Exception):
+        pass
+
+    def _call(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        raise ContentPolicyError("content policy refusal")
+
+    mock_client.chat.completions.create.side_effect = _call
+    mock_openai_module.OpenAI.return_value = mock_client
+
+    import sys
+
+    original_modules = dict(sys.modules)
+    sys.modules["openai"] = mock_openai_module
+    try:
+        with pytest.raises(RuntimeError, match="content policy"):
+            gen.generate(2)
+    finally:
+        sys.modules.clear()
+        sys.modules.update(original_modules)
+    assert call_count == 1
+
+
 def test_llm_insufficient_content_raises_clear_error():
     gen = LLMContentGenerator(api_key="test-key")
     mock_openai_module = MagicMock()
