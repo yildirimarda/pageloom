@@ -8,18 +8,21 @@ Run with:  uv run python scripts/generate_real_multiple_labels.py
 Notes
 -----
 * This uses the REAL IllustrationGenerator (Hugging Face `diffusers`
-  Stable Diffusion 1.5), not a mock. To keep a CPU-only run tractable, the
-  inference step count is reduced (default 12) from the production default of
-  25 -- the *structure* (3 distinct pictures + 3 distinct word labels) is what
-  this verifies, not image fidelity. Set STEPS higher for nicer pictures.
+  Stable Diffusion 1.5), not a mock. It uses the production defaults
+  (``settings.get_num_inference_steps()``, 25-30 steps) so the result is a
+  real production-quality run, not a reduced-step preview. Set
+  ``PAGELOM_SD_STEPS`` to override.
 * A fixed seed makes the committed artifact reproducible.
 * Output:
     test_generations/multiple_labels_word_image_matching.pdf   (the real PDF)
     test_generations/multiple_labels_page.png                  (the rendered page, for inspection)
+    test_generations/multiple_labels_report.json               (steps, size, model id, seed, prompt)
 """
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 import time
 import warnings
@@ -28,14 +31,16 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from pageloom import settings
 from pageloom.generator import IllustrationGenerator
 from pageloom.pipeline import Pipeline
 
-STEPS = int(__import__("os").environ.get("PAGELOM_SD_STEPS", "12"))
-SEED = int(__import__("os").environ.get("PAGELOM_SD_SEED", "42"))
+STEPS = settings.get_num_inference_steps()
+SEED = int(os.environ.get("PAGELOM_SD_SEED", "42"))
 EXAMPLE = "example_matching.png"
 LABELS = "apple, banana, cherry"
 OUT_DIR = Path("test_generations")
+REPORT_PATH = OUT_DIR / "multiple_labels_report.json"
 
 
 class _RealFastGenerator(IllustrationGenerator):
@@ -123,8 +128,28 @@ def main() -> None:
     )
     elapsed = time.time() - t0
     assert result.exists(), f"PDF was not written: {result}"
+
+    # Record the production settings used (steps, size, model, seed) in a
+    # structured report next to the artifact, per the evidence rules.
+    report = {
+        "script": "scripts/generate_real_multiple_labels.py",
+        "provider": gen.provider_name,
+        "model_id": gen.model_id,
+        "inference_steps": STEPS,
+        "guidance_scale": gen.guidance_scale,
+        "seed": SEED,
+        "generation_size": list(gen.capabilities.supported_sizes[0])
+        if gen.capabilities.supported_sizes
+        else [gen.native_size, gen.native_size],
+        "page_size": list(compiler.page_size),
+        "elapsed_seconds": round(elapsed, 2),
+        "output_pdf": str(result),
+        "output_png": str(OUT_DIR / "multiple_labels_page.png"),
+    }
+    REPORT_PATH.write_text(json.dumps(report, indent=2))
     print(f"WROTE {result} ({result.stat().st_size} bytes) in {elapsed:.1f}s", flush=True)
     print(f"PAGE PNG: {OUT_DIR / 'multiple_labels_page.png'}", flush=True)
+    print(f"REPORT: {REPORT_PATH}", flush=True)
 
 
 if __name__ == "__main__":

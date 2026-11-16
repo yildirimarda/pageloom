@@ -105,6 +105,36 @@ def get_openrouter_image_model() -> str:
     return os.environ.get("OPENROUTER_IMAGE_MODEL", "openrouter/auto")
 
 
+def get_num_inference_steps() -> int:
+    """Production default number of diffusion inference steps (25 to 30).
+
+    These settings are what make a local Stable Diffusion run capable of
+    producing a real, usable image rather than noise. Override with the
+    ``PAGELOOM_SD_STEPS`` environment variable.
+    """
+    raw = os.environ.get("PAGELOOM_SD_STEPS")
+    if raw is None or raw.strip() == "":
+        return 25
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 25
+
+
+def get_guidance_scale() -> float:
+    """Production default classifier-free guidance scale (around 7).
+
+    Override with the ``PAGELOOM_SD_GUIDANCE_SCALE`` environment variable.
+    """
+    raw = os.environ.get("PAGELOOM_SD_GUIDANCE_SCALE")
+    if raw is None or raw.strip() == "":
+        return 7.5
+    try:
+        return float(raw)
+    except ValueError:
+        return 7.5
+
+
 def get_flux_host() -> str:
     """FLUX host: ``bfl`` (Black Forest Labs' own API), ``fal`` or ``replicate``.
 

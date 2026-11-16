@@ -110,6 +110,7 @@ The CLI wrapper (`pageloom generate --pages N`) supports:
 - `--no-vision` — disable automatic vision-based page-structure analysis (see next section) and fall back to the image-size heuristic instead.
 - `--vision-provider {openai,anthropic,openrouter}` — provider used for automatic vision analysis (default: `openrouter`, free tier).
 - `--no-consistency` — skip the automatic per-page consistency check (see "Consistency Checking" below): no guard runs and no `Consistency check: N/M` summary is printed. Use this to avoid the extra vision API call per page that a first-run check costs (mirrors `--no-vision`, for the same rate-cap concern on the free tier).
+- `--quick` — low-quality quick mode: generates with only a few inference steps (e.g. 6) for fast, rough previews. **Clearly low quality — never used for verification or consistency checks** (it implies `--no-consistency`). Real runs use the production defaults: 25-30 inference steps, the DPM++ multistep scheduler, float16 on CUDA/MPS, and guidance around 7.
 
 Example:
 

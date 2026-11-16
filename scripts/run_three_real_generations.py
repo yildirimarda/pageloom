@@ -14,14 +14,15 @@ For each of three real example page images (in ``examples_real/``):
      the heuristic classifier and the fallback warning is captured from stderr.
 
   2. A few sibling pages are generated with the REAL Stable Diffusion pipeline
-     (the production ``IllustrationGenerator``, reduced to 6 inference steps for a
-     tractable CPU run; safety checker already disabled in production so children's
-     subjects like "banana" are not blacked out) and compiled to a real KDP PDF.
+     (the production ``IllustrationGenerator`` at the production default of
+     25-30 inference steps; safety checker already disabled in production so
+     children's subjects like "banana" are not blacked out) and compiled to a
+     real KDP PDF.
 
   3. A JSON evidence report is written next to each PDF capturing: the vision
      result (or the fallback), the captured stderr, the detected structure, the
-     content used, and lightweight structural verification metrics of the rendered
-     pages.
+     content used, the SD settings (model id, steps, size, seed), and
+     lightweight structural verification metrics of the rendered pages.
 
 Content for non-alphabet pages is sourced from the vision analysis's own
 ``example_content_items`` (the real labels visible on the example) extended with a
@@ -52,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import numpy as np
 from PIL import Image
 
+from pageloom import settings
 from pageloom.generator import IllustrationGenerator
 from pageloom.page_structure_classifier import PageStructureClassifier, detect_structure
 from pageloom.pipeline import Pipeline
@@ -60,7 +62,7 @@ from pageloom.vision import _VISION_CACHE_DIR, PageVisionAnalyzer, VisionAnalysi
 REAL_EXAMPLES = Path(__file__).resolve().parent.parent / "examples_real"
 OUT_DIR = Path(__file__).resolve().parent.parent / "test_generations"
 
-STEPS = 6  # reduced from production 25 for a tractable CPU-only real run
+STEPS = settings.get_num_inference_steps()  # production default (25-30 steps)
 GEN_SEED = 20261010
 PAGE_SIZE = 512  # divisible by 8 -> no rounding needed for the generator
 
@@ -296,6 +298,8 @@ def generate_for(kind: str) -> dict:
             "real_stable_diffusion": True,
             "model_id": gen.model_id,
             "inference_steps": STEPS,
+            "guidance_scale": gen.guidance_scale,
+            "generation_size": [int(gen.native_size), int(gen.native_size)],
             "elapsed_seconds": sd_elapsed,
             "generator_calls": len(gen._call_log),
             "call_log": gen._call_log,
