@@ -14,6 +14,11 @@ from pageloom.providers import (
     LocalDiffusersProvider,
     build_image_provider,
 )
+from pageloom.providers.size_negotiation import (
+    fit_to_slot,
+    generate_fitting_slot,
+    negotiate_size,
+)
 
 
 class FakeProvider:
@@ -248,3 +253,138 @@ def test_build_image_provider_missing_credential_raises_clear_error(monkeypatch)
         pytest.raises(RuntimeError, match="PAGELOOM_DEMO_KEY"),
     ):
         build_image_provider()
+
+
+class _FixedSizeProvider:
+    """Provider that only generates at its native size and records calls."""
+
+    def __init__(self, size: tuple[int, int]) -> None:
+        self.size = size
+        self.calls: list[tuple[int, int]] = []
+
+    def generate(
+        self,
+        prompt: str,
+        width: int,
+        height: int,
+        references: list[str | Image.Image] | None = None,
+        negative_prompt: str | None = None,
+        seed: int | None = None,
+    ) -> Image.Image:
+        self.calls.append((width, height))
+        return Image.new("RGB", self.size, color="red")
+
+
+# -- negotiate_size: capability profiles with square, tall and wide targets --
+
+
+def test_negotiate_size_passthrough_when_provider_accepts_any_size():
+    caps = ImageProviderCapabilities()
+    assert negotiate_size(612, 792, caps) == (612, 792)
+    assert negotiate_size(100, 100, None) == (100, 100)
+
+
+def test_negotiate_size_square_target_picks_nearest_supported_size():
+    caps = ImageProviderCapabilities(supported_sizes=((512, 512), (1024, 1024)))
+    assert negotiate_size(612, 612, caps) == (512, 512)
+    assert negotiate_size(400, 400, caps) == (512, 512)
+    assert negotiate_size(900, 900, caps) == (1024, 1024)
+
+
+def test_negotiate_size_tall_and_wide_targets_map_to_nearest_supported_size():
+    caps = ImageProviderCapabilities(supported_sizes=((512, 512), (1024, 1024)))
+    # Tall target (512x768) and wide target (768x512) both have area closest
+    # to 512x512 among the supported sizes.
+    assert negotiate_size(512, 768, caps) == (512, 512)
+    assert negotiate_size(768, 512, caps) == (512, 512)
+
+
+def test_negotiate_size_nearest_ratio_scales_to_fit_within_request():
+    caps = ImageProviderCapabilities(supported_aspect_ratios=((1, 1), (16, 9)))
+    assert negotiate_size(600, 600, caps) == (600, 600)  # square target
+    # Tall target (2:3) is closest to square -> largest square that fits.
+    assert negotiate_size(512, 768, caps) == (512, 512)
+    # Wide target (3:2) is closest to 16:9 -> 768x432 fits within 768x512.
+    assert negotiate_size(768, 512, caps) == (768, 432)
+    # Exact 16:9 request maps losslessly.
+    assert negotiate_size(800, 450, caps) == (800, 450)
+
+
+def test_negotiate_size_supported_sizes_take_precedence_over_ratios():
+    caps = ImageProviderCapabilities(
+        supported_sizes=((512, 512),), supported_aspect_ratios=((16, 9),)
+    )
+    assert negotiate_size(768, 512, caps) == (512, 512)
+
+
+# -- fit_to_slot: crop or pad back to the layout slot --
+
+
+def test_fit_to_slot_exact_size_is_no_op():
+    img = Image.new("RGB", (400, 300), color="red")
+    assert fit_to_slot(img, 400, 300) is img
+
+
+def test_fit_to_slot_crops_larger_image_to_center():
+    img = Image.new("RGB", (600, 400), color="blue")
+    out = fit_to_slot(img, 400, 300)
+    assert out.size == (400, 300)
+    # Center crop: top-left of output is (100, 50) of the source.
+    assert out.getpixel((0, 0)) == img.getpixel((100, 50))
+
+
+def test_fit_to_slot_pads_smaller_image_with_white():
+    img = Image.new("RGB", (300, 200), color="green")
+    out = fit_to_slot(img, 400, 300)
+    assert out.size == (400, 300)
+    assert out.getpixel((0, 0)) == (255, 255, 255)  # padding is white
+    assert out.getpixel((50, 50)) == (0, 128, 0)  # green content centered
+
+
+def test_fit_to_slot_crops_one_dim_and_pads_the_other():
+    img = Image.new("RGB", (800, 200), color="red")
+    out = fit_to_slot(img, 400, 600)
+    assert out.size == (400, 600)
+    assert out.getpixel((0, 0)) == (255, 255, 255)
+    assert out.getpixel((200, 300)) == (255, 0, 0)
+
+
+def test_fit_to_slot_passes_through_non_pil_images():
+    obj = object()
+    assert fit_to_slot(obj, 10, 10) is obj
+
+
+# -- generate_fitting_slot: negotiate, generate, fit --
+
+
+def test_generate_fitting_slot_uses_provider_native_size_and_fits_to_slot():
+    provider = FakeProvider()
+    # FakeProvider supports (512, 512) and (1024, 1024); 612x792 is closest to
+    # 512x512 by area, so generation happens there and the result is padded
+    # back to the 612x792 layout slot.
+    image = generate_fitting_slot(provider, "a cat", 612, 792)
+    assert image.size == (612, 792)
+    call = provider.calls[0]
+    assert call["width"] == 512
+    assert call["height"] == 512
+
+
+def test_generate_fitting_slot_crops_when_generated_is_larger():
+    provider = FakeProvider()
+    image = generate_fitting_slot(provider, "a cat", 300, 200)
+    assert image.size == (300, 200)
+    call = provider.calls[0]
+    assert call["width"] == 512
+    assert call["height"] == 512
+
+
+def test_generate_fitting_slot_with_aspect_ratios_only():
+    provider = _FixedSizeProvider((480, 270))
+    provider.capabilities = ImageProviderCapabilities(
+        supported_aspect_ratios=((16, 9),)
+    )  # 480x270 is exactly 16:9
+    image = generate_fitting_slot(provider, "a cat", 480, 480)
+    assert image.size == (480, 480)
+    # Largest 16:9 size fitting in 480x480 is 480x270, then padded to square.
+    assert provider.calls[0] == (480, 270)
+    assert image.getpixel((0, 0)) == (255, 255, 255)  # top/bottom padding
