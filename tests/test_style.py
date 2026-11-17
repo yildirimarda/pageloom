@@ -37,14 +37,14 @@ def test_style_prompt_builder_template_empty_description():
 def test_style_prompt_builder_build_object_name_format():
     builder = StylePromptBuilder("whimsical watercolor")
     prompt = builder.build(content="apple", page_format="object_name")
-    assert "Photo-realistic children's book illustration" in prompt
+    assert "Photo-realistic illustration" in prompt
     assert "object name: apple" in prompt
 
 
 def test_style_prompt_builder_build_themed_scene_format():
     builder = StylePromptBuilder("soft pastel")
     prompt = builder.build(content="garden", theme="autumn", page_format="themed_scene")
-    assert "Themed children's book scene illustration" in prompt
+    assert "Themed scene illustration" in prompt
     assert "theme: autumn" in prompt
     assert "scene: garden" in prompt
 

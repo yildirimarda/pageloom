@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 from pypdf import PdfWriter
 
-# Standard Amazon KDP children's book square size: 8.5 in x 8.5 in at 72 dpi = 612 x 612 pts
+# Default square page size: 8.5 in x 8.5 in at 72 dpi = 612 x 612 pts
 KDP_PAGE_SIZE: tuple[float, float] = (612.0, 612.0)
 
 

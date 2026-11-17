@@ -33,7 +33,7 @@ class StylePromptBuilder:
 
     def template(self) -> str:
         """Return a prompt template that embeds the example style description."""
-        base = f"A children's book illustration in the style of: {self.example_description}"
+        base = f"An illustration in the style of: {self.example_description}"
         return f"{base}, content: {{content}}."
 
     def build(
@@ -55,17 +55,17 @@ class StylePromptBuilder:
         """
         parts: list[str] = []
         if page_format == "object_name":
-            parts.append("Photo-realistic children's book illustration")
+            parts.append("Photo-realistic illustration")
             if content:
                 parts.append(f"object name: {content}")
         elif page_format == "themed_scene":
-            parts.append("Themed children's book scene illustration")
+            parts.append("Themed scene illustration")
             if theme:
                 parts.append(f"theme: {theme}")
             if content:
                 parts.append(f"scene: {content}")
         else:
-            parts.append("A children's book illustration")
+            parts.append("An illustration")
             if theme:
                 parts.append(f"theme: {theme}")
             if content:

@@ -196,7 +196,7 @@ class LocalDiffusersProvider:
         if isinstance(scheduler_config, dict):
             pipeline.scheduler = DPMSolverMultistepScheduler.from_config(scheduler_config)
         # SD1.5's bundled safety checker false-positives on benign
-        # children's-book subjects (e.g. "banana", "cherry", "apple") and
+        # subjects (e.g. "banana", "cherry", "apple") and
         # blacks out the whole image. Disabled at load time via
         # ``safety_checker=None``/``feature_extractor=None``; the late
         # assignment below remains as a belt-and-braces fallback.

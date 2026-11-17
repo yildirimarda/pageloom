@@ -9,7 +9,7 @@ from PIL import Image
 
 
 class PageStructureClassifier:
-    """Classify the structural content pattern of a children's book page."""
+    """Classify the structural content pattern of an example page."""
 
     def __init__(
         self,

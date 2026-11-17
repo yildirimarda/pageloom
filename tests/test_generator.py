@@ -239,7 +239,7 @@ def test_production_generator_disables_safety_checker(mock_mps, mock_cuda, mock_
     """The production IllustrationGenerator must disable SD1.5's NSFW safety checker.
 
     Regression guard for the 2026-10 audit finding (PLAN.md "Discovered"): SD1.5's
-    default safety checker false-positives on benign children's-book subjects
+    default safety checker false-positives on benign subjects
     (e.g. "apple", "banana", "cherry") and returns a fully-black image -- verified
     live: a "red apple on a white background" prompt produced 100% dark pixels.
     That would black out every page of a real `pageloop generate` PDF, so the

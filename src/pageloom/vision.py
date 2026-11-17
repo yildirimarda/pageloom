@@ -36,7 +36,7 @@ from PIL import Image
 from pageloom import settings
 from pageloom.content_generator import PROVIDER_MAP, LLMProvider
 
-_ANALYSIS_PROMPT = """You are analyzing a single page from a children's educational book so that more pages matching its structure can be generated later.
+_ANALYSIS_PROMPT = """You are analyzing a single example page so that more pages matching its structure can be generated later.
 
 Look at the image and respond with ONLY a JSON object (no markdown fences, no commentary) with exactly these keys:
 {
