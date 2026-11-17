@@ -86,6 +86,7 @@ def test_cli_generate_pages_param(tmp_path: Path):
             vision_analyzer=mock_vision_cls.return_value,
             verify_consistency=True,
             max_cost_usd=None,
+            text_mode=None,
             page_size=None,
         )
         call_args = mock_instance.run.call_args
@@ -910,6 +911,7 @@ def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
             vision_analyzer=None,
             verify_consistency=True,
             max_cost_usd=None,
+            text_mode=None,
             page_size=None,
         )
 
@@ -974,6 +976,7 @@ def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
             vision_analyzer=mock_vision_cls.return_value,
             verify_consistency=True,
             max_cost_usd=None,
+            text_mode=None,
             page_size=None,
         )
 

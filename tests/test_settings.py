@@ -361,3 +361,17 @@ def test_get_guidance_scale_env_overrides_profile(monkeypatch):
     monkeypatch.setenv("PAGELOOM_PROFILE", "fast")
     monkeypatch.setenv("PAGELOOM_SD_GUIDANCE_SCALE", "9")
     assert settings.get_guidance_scale() == 9.0
+
+
+def test_get_text_mode_default():
+    assert settings.get_text_mode() == "overlay"
+
+
+def test_get_text_mode_from_env(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_TEXT_MODE", "native")
+    assert settings.get_text_mode() == "native"
+
+
+def test_get_text_mode_from_env_none(monkeypatch):
+    monkeypatch.setenv("PAGELOOM_TEXT_MODE", "none")
+    assert settings.get_text_mode() == "none"

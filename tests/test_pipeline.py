@@ -936,3 +936,98 @@ def test_pipeline_prompt_uses_vision_style_description_instead_of_layout_label(
     # The layout label must no longer be the style reference.
     assert "centered_text_with_illustration" not in prompt
     assert "content: apple" in prompt
+
+
+class _TextModeFakeVisionAnalyzer:
+    """Fake vision analyzer exposing a MagicMock provider for subject/text checks."""
+
+    def __init__(self) -> None:
+        self.provider = MagicMock()
+        self.provider.generate_vision_content.return_value = "yes"
+
+    def analyze(self, source, description=""):
+        return {
+            "content_pattern": "single_letter_word_illustration",
+            "content_type_description": "a letter and word page",
+            "element_count": 1,
+            "arrangement": "centered",
+            "text_image_relationship": "label_per_image",
+            "example_content_items": ["Apple"],
+        }
+
+
+def _text_mode_pipeline(tmp_path, text_mode, vision_analyzer=None):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = _passing_image()
+    mock_gen.capabilities = ImageProviderCapabilities(max_reference_images=0)
+    pipeline = Pipeline(
+        example_image=str(img_path),
+        generator=mock_gen,
+        vision_analyzer=vision_analyzer,
+        text_mode=text_mode,
+    )
+    return pipeline, mock_gen
+
+
+def test_pipeline_text_mode_none_skips_overlay(tmp_path: Path):
+    pipeline, mock_gen = _text_mode_pipeline(tmp_path, "none")
+    pipeline.overlay.apply = MagicMock()
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "out.pdf"
+        pipeline.run(contents=["apple"], output_path=str(tmp_path / "out.pdf"))
+
+    pipeline.overlay.apply.assert_not_called()
+    mock_compile.assert_called_once()
+    # Pages handed to the compiler are the raw generated images (no text).
+    pages = mock_compile.call_args.args[0]
+    assert len(pages) == 1
+    assert mock_gen.generate.call_count == 1
+
+
+def test_pipeline_text_mode_overlay_applies_pillow_lettering(tmp_path: Path):
+    pipeline, _mock_gen = _text_mode_pipeline(tmp_path, "overlay")
+    applied = []
+
+    def _capture_apply(image, text="", **kwargs):
+        applied.append(text)
+        return image
+
+    pipeline.overlay.apply = _capture_apply
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "out.pdf"
+        pipeline.run(contents=["apple"], output_path=str(tmp_path / "out.pdf"))
+
+    assert applied == ["apple"]
+    mock_compile.assert_called_once()
+
+
+def test_pipeline_text_mode_native_provider_draws_text_and_vision_checks(tmp_path: Path):
+    pipeline, mock_gen = _text_mode_pipeline(
+        tmp_path, "native", vision_analyzer=_TextModeFakeVisionAnalyzer()
+    )
+    pipeline.overlay.apply = MagicMock()
+
+    with patch("pageloom.pipeline.PDFCompiler.compile") as mock_compile:
+        mock_compile.return_value = tmp_path / "out.pdf"
+        pipeline.run(contents=["apple"], output_path=str(tmp_path / "out.pdf"))
+
+    prompt = mock_gen.generate.call_args.kwargs.get("prompt", "")
+    assert "Draw the text" in prompt
+    assert "apple" in prompt
+
+    pipeline.overlay.apply.assert_not_called()
+    mock_compile.assert_called_once()
+
+    # The vision model was consulted for subject and text legibility.
+    vision_calls = pipeline.vision_analyzer.provider.generate_vision_content.call_args_list
+    prompts = [call.kwargs.get("prompt", "") for call in vision_calls]
+    assert any("legible" in p for p in prompts), prompts
+
+
+def test_pipeline_invalid_text_mode_raises(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    with pytest.raises(ValueError, match="Unknown text mode"):
+        Pipeline(example_image=str(img_path), generator=MagicMock(), text_mode="bogus")

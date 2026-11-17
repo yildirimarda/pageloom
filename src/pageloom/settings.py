@@ -176,6 +176,16 @@ def get_image_model() -> str | None:
     return os.environ.get("PAGELOOM_IMAGE_MODEL") or None
 
 
+def get_text_mode() -> str:
+    """Text rendering mode: ``overlay`` keeps the exact Pillow lettering,
+    ``native`` lets the image provider draw the text and checks it with the
+    vision model, ``none`` produces images only.
+
+    Override with the ``PAGELOOM_TEXT_MODE`` environment variable.
+    """
+    return os.environ.get("PAGELOOM_TEXT_MODE", "overlay")
+
+
 def get_image_strength() -> float:
     """Image-to-image strength for local Stable Diffusion reference conditioning.
 
