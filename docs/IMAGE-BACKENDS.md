@@ -28,8 +28,8 @@ The project started as a children's book generator. The prompts in `style.py`,
 `content_generator.py`, `vision.py` and `page_structure_classifier.py`, the CLI
 description, and the square default page have all been reworded to be neutral
 and driven by the example's own analysed style and content type rather than
-assuming a children's book. The `KDP_PAGE_SIZE` constant and the square
-612 x 612 pt default page remain (a separate item renames them). The goal is a
+assuming a children's book. The `DEFAULT_PAGE_SIZE` constant and the square
+612 x 612 pt default page remain (a separate item renames them from `KDP_PAGE_SIZE`). The goal is a
 general tool that takes an example image and produces matching images or files
 of any kind.
 

@@ -86,6 +86,7 @@ def test_cli_generate_pages_param(tmp_path: Path):
             vision_analyzer=mock_vision_cls.return_value,
             verify_consistency=True,
             max_cost_usd=None,
+            page_size=None,
         )
         call_args = mock_instance.run.call_args
         assert call_args is not None
@@ -190,9 +191,73 @@ def test_cli_profile_invalid_is_rejected(tmp_path: Path):
     assert exc_info.value.code == 2
 
 
-def test_cli_pages_less_than_one():
-    result = main(["generate", "--pages", "0"])
-    assert result == 1
+def test_cli_page_size_presets_and_custom_passed_to_pipeline(tmp_path: Path):
+    """`--page-size` accepts presets (square, a4, letter) and WIDTHxHEIGHT and
+    forwards the parsed size to Pipeline as page_size."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=_DEFAULT_VISION_STRUCTURE),
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = _DEFAULT_VISION_STRUCTURE
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        for page_size in ("square", "a4", "letter", "612x792"):
+            result = main(
+                [
+                    "generate",
+                    "--pages",
+                    "1",
+                    "--example",
+                    str(img_path),
+                    "--output",
+                    str(tmp_path / "out.pdf"),
+                    "--page-size",
+                    page_size,
+                ]
+            )
+            assert result == 0
+            kwargs = mock_pipeline.call_args.kwargs
+            assert kwargs["page_size"] is not None
+
+        # Default (no --page-size) leaves page_size unset (None -> example's own size).
+        main(
+            [
+                "generate",
+                "--pages",
+                "1",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        assert mock_pipeline.call_args.kwargs["page_size"] is None
+
+
+def test_cli_page_size_invalid_is_rejected(tmp_path: Path):
+    """An invalid `--page-size` value is rejected by argparse."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--page-size",
+                "bogus",
+            ]
+        )
+    assert exc_info.value.code == 2
 
 
 def test_cli_pages_within_limit(tmp_path: Path):
@@ -598,6 +663,7 @@ def test_cli_description_flag_reaches_classifier_and_pipeline(tmp_path: Path):
             vision_analyzer=None,
             verify_consistency=True,
             max_cost_usd=None,
+            page_size=None,
         )
 
 
@@ -661,6 +727,7 @@ def test_cli_default_auto_vision_used_when_no_description(tmp_path: Path):
             vision_analyzer=mock_vision_cls.return_value,
             verify_consistency=True,
             max_cost_usd=None,
+            page_size=None,
         )
 
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from pageloom import settings
 from pageloom.content_generator import LLMContentGenerator
 from pageloom.page_structure_classifier import detect_structure
+from pageloom.pdf_compiler import parse_page_size
 from pageloom.pipeline import Pipeline
 from pageloom.providers import IMAGE_PROVIDER_MAP, build_image_provider
 from pageloom.providers.size_negotiation import generate_fitting_slot
@@ -214,6 +215,16 @@ def main(argv: list[str] | None = None) -> int:
             "previews (6 steps, guidance ~5); 'quality' uses the production "
             "defaults (25-30 steps, guidance ~7). Defaults to 'quality' "
             "(overridable with PAGELOOM_PROFILE)."
+        ),
+    )
+    generate_parser.add_argument(
+        "--page-size",
+        type=parse_page_size,
+        default=None,
+        help=(
+            "Page size for the output PDF. Presets: square, a4, letter. "
+            "Custom: WIDTHxHEIGHT in points (e.g. 612x792). Defaults to the "
+            "example image's own size/aspect ratio."
         ),
     )
 
@@ -443,6 +454,7 @@ def main(argv: list[str] | None = None) -> int:
             verify_consistency=not args.no_consistency and not args.quick,
             # --max-cost caps total estimated spend; the run stops before exceeding it.
             max_cost_usd=args.max_cost,
+            page_size=args.page_size,
         )
         if args.quick:
             # Quick mode is low quality: drop to a rough-preview step count. The

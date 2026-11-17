@@ -1,10 +1,27 @@
+import pytest
 from PIL import Image
 
-from pageloom.pdf_compiler import KDP_PAGE_SIZE, PDFCompiler
+from pageloom.pdf_compiler import DEFAULT_PAGE_SIZE, PDFCompiler, parse_page_size
 
 
-def test_kdp_page_size_is_square_612():
-    assert KDP_PAGE_SIZE == (612.0, 612.0)
+def test_default_page_size_is_square_612():
+    assert DEFAULT_PAGE_SIZE == (612.0, 612.0)
+
+
+def test_kdp_page_size_deprecated_alias_emits_warning():
+    """KDP_PAGE_SIZE is kept as a deprecated alias for one release."""
+    import warnings
+
+    from pageloom import pdf_compiler
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        alias = pdf_compiler.KDP_PAGE_SIZE
+    assert alias == DEFAULT_PAGE_SIZE
+    assert any(
+        issubclass(w.category, DeprecationWarning) and "KDP_PAGE_SIZE" in str(w.message)
+        for w in caught
+    )
 
 
 def test_pdf_compiler_init_default_size():
@@ -84,3 +101,28 @@ def test_compile_unsupported_type_raises(tmp_path):
         assert False, "Expected TypeError"
     except TypeError:
         pass
+
+
+def test_parse_page_size_none_returns_none():
+    assert parse_page_size(None) is None
+
+
+def test_parse_page_size_presets():
+    assert parse_page_size("square") == DEFAULT_PAGE_SIZE
+    assert parse_page_size("a4") == (595.28, 841.89)
+    assert parse_page_size("letter") == (612.0, 792.0)
+
+
+def test_parse_page_size_presets_case_insensitive():
+    assert parse_page_size("SQUARE") == DEFAULT_PAGE_SIZE
+    assert parse_page_size(" A4 ") == (595.28, 841.89)
+
+
+def test_parse_page_size_custom_widthxheight():
+    assert parse_page_size("612x792") == (612.0, 792.0)
+    assert parse_page_size("800 x 600") == (800.0, 600.0)
+
+
+def test_parse_page_size_invalid_raises():
+    with pytest.raises(ValueError):
+        parse_page_size("not-a-size")
