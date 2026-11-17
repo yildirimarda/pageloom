@@ -96,6 +96,253 @@ def test_cli_generate_pages_param(tmp_path: Path):
         assert contents == DEFAULT_CONTENTS[:3]
 
 
+def test_cli_generate_content_file_txt(tmp_path: Path):
+    """`generate --content-file` supplies items from a plain-text file without an LLM."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    content_file = tmp_path / "items.txt"
+    content_file.write_text("Alpha\nBeta\nGamma\n", encoding="utf-8")
+
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer"),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--content-file",
+                str(content_file),
+            ]
+        )
+        assert result == 0
+        contents = mock_instance.run.call_args.kwargs.get("contents")
+        assert contents == ["Alpha", "Beta"]
+
+
+def test_cli_generate_content_file_json(tmp_path: Path):
+    """`generate --content-file` supports JSON lists of strings without an LLM."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    content_file = tmp_path / "items.json"
+    content_file.write_text('["Alpha", "Beta", "Gamma"]', encoding="utf-8")
+
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer"),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--content-file",
+                str(content_file),
+            ]
+        )
+        assert result == 0
+        contents = mock_instance.run.call_args.kwargs.get("contents")
+        assert contents == ["Alpha", "Beta"]
+
+
+def test_cli_generate_content_file_json_objects(tmp_path: Path):
+    """`generate --content-file` supports JSON objects with a ``prompt`` key."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    content_file = tmp_path / "items.json"
+    content_file.write_text('[{"prompt": "Alpha"}, {"prompt": "Beta"}]', encoding="utf-8")
+
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer"),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--content-file",
+                str(content_file),
+            ]
+        )
+        assert result == 0
+        contents = mock_instance.run.call_args.kwargs.get("contents")
+        assert contents == ["Alpha", "Beta"]
+
+
+def test_cli_generate_content_file_invalid_json_names_line(tmp_path: Path, capsys):
+    """Invalid JSON in a content file names the offending line and column."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    content_file = tmp_path / "items.json"
+    content_file.write_text('[\n  "Alpha",\n  not valid\n]', encoding="utf-8")
+
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer"),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--content-file",
+                str(content_file),
+            ]
+        )
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Invalid JSON" in captured.err
+        assert "line 3" in captured.err
+
+
+def test_cli_generate_content_file_bad_entry_names_line(tmp_path: Path, capsys):
+    """A non-string, non-prompt JSON entry names its line."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    content_file = tmp_path / "items.json"
+    content_file.write_text('["Alpha", 42, "Beta"]', encoding="utf-8")
+
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer"),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--content-file",
+                str(content_file),
+            ]
+        )
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "line 2" in captured.err
+        assert "Unsupported JSON entry" in captured.err
+
+
+def test_cli_generate_content_file_missing(tmp_path: Path, capsys):
+    """A missing content file exits 1 with a clear error naming the file."""
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+
+    detected_structure = {
+        "content_pattern": "single_letter_word_illustration",
+        "element_count": 1,
+        "arrangement": "centered",
+        "text_image_relationship": "label_per_image",
+    }
+
+    with (
+        patch("pageloom.cli.detect_structure", return_value=detected_structure),
+        patch("pageloom.cli.PageVisionAnalyzer"),
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+
+        missing = tmp_path / "does-not-exist.txt"
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--content-file",
+                str(missing),
+            ]
+        )
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Content file not found" in captured.err
+
+
 def test_cli_quick_flag_skips_verification_and_uses_low_steps(tmp_path: Path):
     """`--quick` is clearly low quality: it skips the consistency check and
     drops the generator to a rough-preview step count. Never used for

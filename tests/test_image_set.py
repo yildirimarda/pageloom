@@ -68,6 +68,22 @@ def test_load_contents_bad_json_raises(tmp_path):
         load_contents([], file)
 
 
+def test_load_contents_bad_json_names_line(tmp_path):
+    """Invalid JSON names the offending line in the error message."""
+    file = tmp_path / "bad.json"
+    file.write_text('[\n  "apple",\n  not valid\n]', encoding="utf-8")
+    with pytest.raises(ValueError, match="line 3"):
+        load_contents([], file)
+
+
+def test_load_contents_bad_entry_names_line(tmp_path):
+    """A non-string, non-prompt JSON entry names its line in the error."""
+    file = tmp_path / "bad.json"
+    file.write_text('["apple", 42, "banana"]', encoding="utf-8")
+    with pytest.raises(ValueError, match="line 2"):
+        load_contents([], file)
+
+
 @pytest.mark.parametrize(
     "dim,expected",
     [(618, 624), (800, 800), (513, 520), (512, 512), (1, 8), (7, 8)],
