@@ -174,6 +174,17 @@ def main(argv: list[str] | None = None) -> int:
         help="LLM provider to use for content generation (default: openai).",
     )
     generate_parser.add_argument(
+        "--content-file",
+        type=str,
+        default=None,
+        help=(
+            "Path to a txt/csv/json file with content items (one prompt per "
+            "line/item; JSON: a list of strings, or objects with a ``prompt`` "
+            "key). Supplies content without an LLM. When given, it replaces "
+            "the built-in alphabet sample. File errors name the offending line."
+        ),
+    )
+    generate_parser.add_argument(
         "--image-provider",
         type=str,
         default=None,
@@ -506,14 +517,25 @@ def main(argv: list[str] | None = None) -> int:
         # Determine available content based on detected page structure.
         # Only alphabet-style pages have a fixed built-in content list.
         content_pattern = page_structure.get("content_pattern", "single_letter_word_illustration")
-        if content_pattern == "single_letter_word_illustration":
-            built_in_contents = DEFAULT_CONTENTS
-            built_in_limit = len(DEFAULT_CONTENTS)
-        else:
-            # Non-alphabet structures (object_name_pair, multi_item_scene,
-            # etc.) have no fixed built-in content list.
-            built_in_contents = []
-            built_in_limit = 0
+        try:
+            if args.content_file is not None:
+                # User-supplied content file: content items without an LLM.
+                # Replaces the built-in alphabet sample when given.
+                built_in_contents = load_contents([], args.content_file)
+                built_in_limit = len(built_in_contents)
+            elif content_pattern == "single_letter_word_illustration":
+                # Built-in alphabet sample: one optional sample, not the
+                # default assumed for every page type.
+                built_in_contents = DEFAULT_CONTENTS
+                built_in_limit = len(DEFAULT_CONTENTS)
+            else:
+                # Non-alphabet structures (object_name_pair, multi_item_scene,
+                # etc.) have no fixed built-in content list.
+                built_in_contents = []
+                built_in_limit = 0
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
 
         # The LLM generator should trigger whenever N exceeds whatever content
         # items are explicitly available for the detected structure -- not a

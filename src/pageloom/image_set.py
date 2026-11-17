@@ -51,21 +51,27 @@ def _load_content_file(path: str | Path) -> list[str]:
     suffix = path.suffix.lower()
     text = path.read_text(encoding="utf-8")
     if suffix == ".json":
-        data = json.loads(text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Invalid JSON in content file {path} at line {exc.lineno}, "
+                f"column {exc.colno}: {exc.msg}"
+            ) from exc
         if not isinstance(data, list):
             raise ValueError(f"JSON content file {path} must contain a list of prompts")
         items: list[str] = []
-        for entry in data:
+        for idx, entry in enumerate(data, start=1):
             if isinstance(entry, str):
                 items.append(entry)
             elif isinstance(entry, dict) and "prompt" in entry:
                 items.append(str(entry["prompt"]))
             else:
-                raise ValueError(f"Unsupported JSON entry in {path}: {entry!r}")
+                raise ValueError(f"Unsupported JSON entry at line {idx} in {path}: {entry!r}")
         return [item for item in items if item and item.strip()]
     # Plain text or CSV: one prompt per line.
     lines: list[str] = []
-    for line in text.splitlines():
+    for lineno, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
