@@ -205,3 +205,10 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   and the new generate()-level black-frame retry; this follow-up only removes
   the dead weight. Cover with a test that asserts `from_pretrained` was called
   with `safety_checker=None`.
+
+## Discovered
+- [ ] Add a unit test for the discovery-failure fallback in
+  `settings.get_openrouter_vision_model`: when the OpenRouter models endpoint
+  is unreachable or returns malformed data, the function logs the failure and
+  falls back to `openrouter/free` instead of raising (see
+  `tests/test_settings.py::test_get_openrouter_vision_model_falls_back_to_free_router_on_discovery_failure`).
