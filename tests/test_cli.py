@@ -1075,6 +1075,100 @@ def test_cli_image_provider_and_model_flags_passed_through(tmp_path: Path):
         assert kwargs["model"] == "custom/image-model"
 
 
+def _cli_generate_with_output_format(output_format: str, tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = dict(_DEFAULT_VISION_STRUCTURE)
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+        result = main(
+            [
+                "generate",
+                "--pages",
+                "2",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--output-format",
+                output_format,
+            ]
+        )
+        assert result == 0
+        return mock_instance.run.call_args.kwargs.get("output_format")
+
+
+def test_cli_output_format_pdf_passes_to_pipeline(tmp_path: Path):
+    assert _cli_generate_with_output_format("pdf", tmp_path) == "pdf"
+
+
+def test_cli_output_format_png_passes_to_pipeline(tmp_path: Path):
+    assert _cli_generate_with_output_format("png", tmp_path) == "png"
+
+
+def test_cli_output_format_jpeg_passes_to_pipeline(tmp_path: Path):
+    assert _cli_generate_with_output_format("jpeg", tmp_path) == "jpeg"
+
+
+def test_cli_output_format_zip_passes_to_pipeline(tmp_path: Path):
+    assert _cli_generate_with_output_format("zip", tmp_path) == "zip"
+
+
+def test_cli_output_format_default_is_pdf(tmp_path: Path):
+    kwargs = _capture_run_kwargs(tmp_path)
+    assert kwargs.get("output_format") == "pdf"
+
+
+def _capture_run_kwargs(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    with (
+        patch("pageloom.cli.PageVisionAnalyzer") as mock_vision_cls,
+        patch("pageloom.cli.Pipeline") as mock_pipeline,
+    ):
+        mock_vision_cls.return_value.analyze.return_value = dict(_DEFAULT_VISION_STRUCTURE)
+        mock_instance = MagicMock()
+        mock_pipeline.return_value = mock_instance
+        mock_instance.run.return_value = tmp_path / "out.pdf"
+        main(
+            [
+                "generate",
+                "--pages",
+                "1",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+            ]
+        )
+        return mock_instance.run.call_args.kwargs
+
+
+def test_cli_invalid_output_format_is_rejected(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="purple").save(img_path)
+    with pytest.raises(SystemExit) as exc_info:
+        main(
+            [
+                "generate",
+                "--pages",
+                "1",
+                "--example",
+                str(img_path),
+                "--output",
+                str(tmp_path / "out.pdf"),
+                "--output-format",
+                "bmp",
+            ]
+        )
+    assert exc_info.value.code == 2
+
+
 def test_cli_generate_runs_consistency_guard_with_vision_analyzer(tmp_path: Path, capsys):
     """`pageloom generate` must actually run ConsistencyGuard on every generated
     page (previously the class was only ever constructed inside tests), and the

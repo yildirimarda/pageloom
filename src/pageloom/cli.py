@@ -133,7 +133,18 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         type=str,
         default=default_output,
-        help="Output PDF path.",
+        help="Output path (PDF by default; the stem is reused for numbered images/zip).",
+    )
+    generate_parser.add_argument(
+        "--output-format",
+        type=str,
+        default="pdf",
+        choices=["pdf", "png", "jpeg", "zip"],
+        help=(
+            "Output format: 'pdf' compiles pages into a single PDF; 'png'/'jpeg' "
+            "write individual numbered images next to --output; 'zip' bundles the "
+            "numbered images into a zip archive at --output."
+        ),
     )
     generate_parser.add_argument(
         "--format",
@@ -467,6 +478,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_path=args.output,
                 page_format=args.format,
                 force=args.force,
+                output_format=args.output_format,
             )
         except QualityGateError as exc:
             print(

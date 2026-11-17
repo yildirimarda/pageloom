@@ -161,6 +161,109 @@ def test_pipeline_run(mock_compile, tmp_path: Path):
     assert mock_compile.called
 
 
+@patch("pageloom.pipeline.write_zip")
+@patch("pageloom.pipeline.write_individual_images")
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_run_output_format_pdf(mock_compile, mock_images, mock_zip, tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = _passing_image()
+    mock_compile.return_value = tmp_path / "output.pdf"
+
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    pipeline.run(
+        contents=["apple"],
+        output_path=str(tmp_path / "out.pdf"),
+        output_format="pdf",
+    )
+    mock_compile.assert_called_once()
+    mock_images.assert_not_called()
+    mock_zip.assert_not_called()
+
+
+@patch("pageloom.pipeline.write_zip")
+@patch("pageloom.pipeline.write_individual_images")
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_run_output_format_png(mock_compile, mock_images, mock_zip, tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = _passing_image()
+    mock_images.return_value = tmp_path
+
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    pipeline.run(
+        contents=["apple", "banana"],
+        output_path=str(tmp_path / "out.png"),
+        output_format="png",
+    )
+    mock_images.assert_called_once()
+    args, _kwargs = mock_images.call_args
+    assert args[2] == "png"
+    assert len(args[0]) == 2
+    mock_compile.assert_not_called()
+    mock_zip.assert_not_called()
+
+
+@patch("pageloom.pipeline.write_zip")
+@patch("pageloom.pipeline.write_individual_images")
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_run_output_format_jpeg(mock_compile, mock_images, mock_zip, tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = _passing_image()
+    mock_images.return_value = tmp_path
+
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    pipeline.run(
+        contents=["apple"],
+        output_path=str(tmp_path / "out.jpeg"),
+        output_format="jpeg",
+    )
+    mock_images.assert_called_once()
+    args, _kwargs = mock_images.call_args
+    assert args[2] == "jpeg"
+    mock_compile.assert_not_called()
+    mock_zip.assert_not_called()
+
+
+@patch("pageloom.pipeline.write_zip")
+@patch("pageloom.pipeline.write_individual_images")
+@patch("pageloom.pipeline.PDFCompiler.compile")
+def test_pipeline_run_output_format_zip(mock_compile, mock_images, mock_zip, tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = _passing_image()
+    mock_zip.return_value = tmp_path / "out.zip"
+
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    pipeline.run(
+        contents=["apple"],
+        output_path=str(tmp_path / "out.zip"),
+        output_format="zip",
+    )
+    mock_zip.assert_called_once()
+    mock_compile.assert_not_called()
+    mock_images.assert_not_called()
+
+
+def test_pipeline_run_invalid_output_format_raises(tmp_path: Path):
+    img_path = tmp_path / "example.png"
+    Image.new("RGB", (512, 512), color="green").save(img_path)
+    mock_gen = MagicMock()
+    mock_gen.generate.return_value = _passing_image()
+    pipeline = Pipeline(example_image=str(img_path), generator=mock_gen)
+    with pytest.raises(ValueError):
+        pipeline.run(
+            contents=["apple"],
+            output_path=str(tmp_path / "out.pdf"),
+            output_format="bmp",
+        )
+
+
 @patch("pageloom.pipeline.PDFCompiler.compile")
 def test_pipeline_run_caches_raw_illustrations(mock_compile, tmp_path: Path):
     img_path = tmp_path / "example.png"
