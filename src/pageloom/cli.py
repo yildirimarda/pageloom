@@ -9,8 +9,9 @@ from pathlib import Path
 
 from pageloom import settings
 from pageloom.content_generator import LLMContentGenerator
+from pageloom.image_set import ImageSetRenderer, load_contents
 from pageloom.page_structure_classifier import detect_structure
-from pageloom.pdf_compiler import parse_page_size
+from pageloom.pdf_compiler import parse_page_size, write_individual_images, write_zip
 from pageloom.pipeline import Pipeline
 from pageloom.providers import IMAGE_PROVIDER_MAP, build_image_provider
 from pageloom.providers.size_negotiation import generate_fitting_slot
@@ -275,6 +276,94 @@ def main(argv: list[str] | None = None) -> int:
         help="Image model id (default: provider default, from PAGELOOM_IMAGE_MODEL).",
     )
 
+    images_parser = subparsers.add_parser(
+        "images",
+        help="Generate one image per prompt, with no page/letter/text-overlay logic.",
+    )
+    images_parser.add_argument(
+        "prompts",
+        nargs="*",
+        help="Image prompts to render (one image per prompt).",
+    )
+    images_parser.add_argument(
+        "--content-file",
+        type=str,
+        default=None,
+        help=(
+            "Path to a txt/csv/json file with one prompt per line/item "
+            "(JSON: a list of strings, or objects with a ``prompt`` key). "
+            "Prompts given as arguments are merged ahead of the file's items."
+        ),
+    )
+    images_parser.add_argument(
+        "--style-reference",
+        type=str,
+        default=None,
+        help=(
+            "Optional style reference image to condition generation on. "
+            "Providers that support reference images use it to match its style."
+        ),
+    )
+    images_parser.add_argument(
+        "--output",
+        type=str,
+        default="output.png",
+        help="Output path (numbered images or a zip archive next to it).",
+    )
+    images_parser.add_argument(
+        "--output-format",
+        type=str,
+        default="png",
+        choices=["png", "jpeg", "zip"],
+        help="Output format: 'png'/'jpeg' write numbered images; 'zip' bundles them.",
+    )
+    images_parser.add_argument(
+        "--width",
+        type=int,
+        default=512,
+        help="Generation width in pixels (rounded up to a multiple of 8).",
+    )
+    images_parser.add_argument(
+        "--height",
+        type=int,
+        default=512,
+        help="Generation height in pixels (rounded up to a multiple of 8).",
+    )
+    images_parser.add_argument(
+        "--image-provider",
+        type=str,
+        default=None,
+        choices=list(IMAGE_PROVIDER_MAP),
+        help="Image-generation provider (default: local, from PAGELOOM_IMAGE_PROVIDER).",
+    )
+    images_parser.add_argument(
+        "--image-model",
+        type=str,
+        default=None,
+        help="Image model id (default: provider default, from PAGELOOM_IMAGE_MODEL).",
+    )
+    images_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Regenerate images even if a cached copy exists.",
+    )
+    images_parser.add_argument(
+        "--max-cost",
+        type=float,
+        default=None,
+        help=(
+            "Maximum estimated total cost in USD for the run. Generation stops "
+            "before this budget is exceeded (cached images are free)."
+        ),
+    )
+    images_parser.add_argument(
+        "--estimate",
+        action="store_true",
+        default=False,
+        help=("Print the expected cost for the run without calling any image provider, then exit."),
+    )
+
     args = parser.parse_args(argv)
 
     if args.command is None:
@@ -346,6 +435,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001 - surface the exact failure
             print(f"FAIL: Image smoke test failed: {exc}", file=sys.stderr)
             return 1
+
+    if args.command == "images":
+        return _run_images(args)
 
     if args.command != "generate":
         parser.print_help()
@@ -495,6 +587,67 @@ def main(argv: list[str] | None = None) -> int:
             os.environ.pop("PAGELOOM_PROFILE", None)
         else:
             os.environ["PAGELOOM_PROFILE"] = _prev_profile
+
+
+def _run_images(args) -> int:
+    """Handle the ``pageloom images`` subcommand.
+
+    Generates one image per prompt (from arguments or a content file), optionally
+    conditioned on a style reference, with no page, letter, or text-overlay
+    logic. Writes numbered images or a zip archive to --output.
+    """
+    try:
+        contents = load_contents(args.prompts, args.content_file)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if not contents:
+        print(
+            "Error: no prompts given. Pass prompts as arguments or use --content-file.",
+            file=sys.stderr,
+        )
+        return 1
+
+    renderer = ImageSetRenderer(
+        contents=contents,
+        provider_name=args.image_provider,
+        model=args.image_model,
+        style_reference=args.style_reference,
+        width=args.width,
+        height=args.height,
+        force=args.force,
+        max_cost_usd=args.max_cost,
+    )
+    if args.estimate:
+        print(
+            f"Estimated cost: ${renderer.estimated_total_cost_usd():.2f} for {len(contents)} image(s)"
+        )
+        return 0
+
+    try:
+        images = renderer.render()
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+        print(f"Error: image generation failed: {exc}", file=sys.stderr)
+        return 1
+    if not images:
+        print("Warning: no images were generated (budget may have been reached).", file=sys.stderr)
+        return 0
+
+    output_path = Path(args.output)
+    output_dir = settings.get_output_dir()
+    if output_dir is not None and not output_path.is_absolute():
+        output_path = Path(output_dir) / output_path
+
+    try:
+        if args.output_format == "zip":
+            result = write_zip(images, output_path)
+        else:
+            result = write_individual_images(images, output_path, args.output_format)
+    except (OSError, ValueError) as exc:
+        print(f"Error: could not write output: {exc}", file=sys.stderr)
+        return 1
+    print(f"Generated {len(images)} image(s) -> {result}")
+    return 0
 
 
 if __name__ == "__main__":

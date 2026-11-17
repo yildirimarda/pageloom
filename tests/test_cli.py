@@ -1283,3 +1283,180 @@ def test_cli_no_consistency_flag_skips_check(tmp_path: Path, capsys):
     # And nothing produced a `Consistency check:` line for the user.
     out = capsys.readouterr()
     assert "Consistency check:" not in out.out
+
+
+def test_cli_images_with_prompts(tmp_path: Path, capsys):
+    """`pageloom images` renders one image per positional prompt."""
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 0.0
+        mock_renderer.render.return_value = [
+            Image.new("RGB", (64, 64), color="red"),
+            Image.new("RGB", (64, 64), color="blue"),
+        ]
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(
+            [
+                "images",
+                "a red ball",
+                "a blue cube",
+                "--output",
+                str(tmp_path / "out.png"),
+            ]
+        )
+        assert result == 0
+        kwargs = mock_renderer_cls.call_args.kwargs
+        assert kwargs["contents"] == ["a red ball", "a blue cube"]
+        mock_renderer.render.assert_called_once()
+
+    out = capsys.readouterr()
+    assert "Generated 2 image(s)" in out.out
+    assert (tmp_path / "out_001.png").exists()
+    assert (tmp_path / "out_002.png").exists()
+
+
+def test_cli_images_content_file_txt(tmp_path: Path, capsys):
+    """`--content-file` supplies prompts from a plain-text file."""
+    content_file = tmp_path / "prompts.txt"
+    content_file.write_text("one\ntwo\n", encoding="utf-8")
+
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 0.0
+        mock_renderer.render.return_value = [Image.new("RGB", (64, 64), color="red")]
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(
+            ["images", "--content-file", str(content_file), "--output", str(tmp_path / "out.png")]
+        )
+        assert result == 0
+        assert mock_renderer_cls.call_args.kwargs["contents"] == ["one", "two"]
+
+
+def test_cli_images_content_file_json(tmp_path: Path, capsys):
+    """`--content-file` supports JSON lists of strings and prompt objects."""
+    content_file = tmp_path / "prompts.json"
+    content_file.write_text('[{"prompt": "cat"}, "dog"]', encoding="utf-8")
+
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 0.0
+        mock_renderer.render.return_value = [Image.new("RGB", (64, 64), color="red")]
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(
+            ["images", "--content-file", str(content_file), "--output", str(tmp_path / "out.png")]
+        )
+        assert result == 0
+        assert mock_renderer_cls.call_args.kwargs["contents"] == ["cat", "dog"]
+
+
+def test_cli_images_no_prompts_errors(capsys):
+    """No prompts and no content file must exit 1 with a clear error."""
+    result = main(["images"])
+    assert result == 1
+    assert "no prompts given" in capsys.readouterr().err
+
+
+def test_cli_images_output_formats(tmp_path: Path):
+    """png, jpeg and zip output formats all write the generated images."""
+    for fmt, expected_ext in [("png", "png"), ("jpeg", "jpg")]:
+        with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+            mock_renderer = MagicMock()
+            mock_renderer.estimated_total_cost_usd.return_value = 0.0
+            mock_renderer.render.return_value = [
+                Image.new("RGB", (64, 64), color="red"),
+                Image.new("RGB", (64, 64), color="blue"),
+            ]
+            mock_renderer_cls.return_value = mock_renderer
+
+            result = main(
+                [
+                    "images",
+                    "a",
+                    "b",
+                    "--output-format",
+                    fmt,
+                    "--output",
+                    str(tmp_path / f"out_{fmt}"),
+                ]
+            )
+            assert result == 0
+        assert (tmp_path / f"out_{fmt}_001.{expected_ext}").exists()
+        assert (tmp_path / f"out_{fmt}_002.{expected_ext}").exists()
+
+
+def test_cli_images_zip_output(tmp_path: Path):
+    """The zip output format bundles numbered PNGs into one archive."""
+    zip_path = tmp_path / "out.zip"
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 0.0
+        mock_renderer.render.return_value = [
+            Image.new("RGB", (64, 64), color="red"),
+        ]
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(["images", "a", "--output-format", "zip", "--output", str(zip_path)])
+        assert result == 0
+
+    import zipfile
+
+    assert zip_path.exists()
+    with zipfile.ZipFile(zip_path) as archive:
+        assert "001.png" in archive.namelist()
+
+
+def test_cli_images_style_reference_forwarded(tmp_path: Path, capsys):
+    """--style-reference is handed to the renderer unchanged."""
+    reference = tmp_path / "ref.png"
+    Image.new("RGB", (64, 64), color="green").save(reference)
+
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 0.0
+        mock_renderer.render.return_value = [Image.new("RGB", (64, 64), color="red")]
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(["images", "a prompt", "--style-reference", str(reference)])
+        assert result == 0
+        assert mock_renderer_cls.call_args.kwargs["style_reference"] == str(reference)
+
+
+def test_cli_images_provider_and_model_flags_passed_through(tmp_path: Path, capsys):
+    """--image-provider and --image-model reach the renderer."""
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 0.0
+        mock_renderer.render.return_value = [Image.new("RGB", (64, 64), color="red")]
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(
+            [
+                "images",
+                "a prompt",
+                "--image-provider",
+                "gemini",
+                "--image-model",
+                "gemini-nano-banana-2.1",
+            ]
+        )
+        assert result == 0
+        kwargs = mock_renderer_cls.call_args.kwargs
+        assert kwargs["provider_name"] == "gemini"
+        assert kwargs["model"] == "gemini-nano-banana-2.1"
+
+
+def test_cli_images_estimate_prints_cost_without_rendering(tmp_path: Path, capsys):
+    """--estimate prints the expected cost and never calls render()."""
+    with patch("pageloom.cli.ImageSetRenderer") as mock_renderer_cls:
+        mock_renderer = MagicMock()
+        mock_renderer.estimated_total_cost_usd.return_value = 5.25
+        mock_renderer_cls.return_value = mock_renderer
+
+        result = main(["images", "a prompt", "--estimate"])
+        assert result == 0
+        mock_renderer.render.assert_not_called()
+
+    assert "$5.25" in capsys.readouterr().out
