@@ -124,6 +124,12 @@ pageloom generate --pages 10 --use-llm --example object_example.png --descriptio
 
 Note: the LLM generator triggers whenever `--pages` exceeds the number of content items actually available for the *detected* structure — the built-in 35-item list for `single_letter_word_illustration` pages, or 0 for any other structure (which have no fixed built-in list).
 
+### Other CLI commands
+
+- `pageloom images PROMPT [...] [--content-file FILE] [--style-reference IMAGE] [--output out.png] [--output-format png|jpeg|zip] [--image-provider local|openai|gemini|openrouter|flux] [--image-model ID]` — render one image per prompt, with **no page, letter, or text-overlay logic**, so it works for any image set and not only for pages. Prompts may be passed as arguments or loaded from a txt/csv/json `--content-file` (JSON: a list of strings, or objects with a `prompt` key). `--estimate` prints the expected cost without calling any provider.
+- `pageloom check-vision` — smoke-test the configured vision provider/model.
+- `pageloom check-image` — smoke-test the configured image provider by generating one small image.
+
 ### Per-Provider Default Models
 
 Each provider has its own default model setting so the model isn't hardcoded in code:
