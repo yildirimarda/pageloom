@@ -207,7 +207,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
   with `safety_checker=None`.
 
 ## Discovered
-- [ ] Add a unit test for the discovery-failure fallback in
+- [x] Add a unit test for the discovery-failure fallback in
   `settings.get_openrouter_vision_model`: when the OpenRouter models endpoint
   is unreachable or returns malformed data, the function logs the failure and
   falls back to `openrouter/free` instead of raising (see
