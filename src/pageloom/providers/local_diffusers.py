@@ -18,7 +18,7 @@ from diffusers import (
 from PIL import Image
 
 from pageloom import settings
-from pageloom.license_check import LicenseVerifier
+from pageloom.license_check import DEFAULT_CONTEXT, LicenseVerifier
 from pageloom.providers.base import ImageProviderCapabilities
 
 # Abort the safety-checker retry loop after this many consecutive
@@ -80,7 +80,7 @@ class LocalDiffusersProvider:
         device: str | None = None,
         torch_dtype: torch.dtype | None = None,
         verify_license: bool = True,
-        license_context: str = "book intended for sale",
+        license_context: str = DEFAULT_CONTEXT,
         image_strength: float | None = None,
     ) -> None:
         self.model_id = model_id if model_id is not None else settings.get_model_id()
@@ -123,7 +123,7 @@ class LocalDiffusersProvider:
             settings.get_image_strength() if image_strength is None else image_strength
         )
         if verify_license:
-            verifier = LicenseVerifier(model_id=self.model_id)
+            verifier = LicenseVerifier(model_id=self.model_id, provider="local")
             verifier.verify(
                 intended_use="commercial",
                 context=license_context,

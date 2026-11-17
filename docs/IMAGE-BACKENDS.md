@@ -20,7 +20,7 @@ The default model id (`runwayml/stable-diffusion-v1-5`, overridable via `PAGELOO
 - **`runwayml/stable-diffusion-v1-5` with `--profile fast`** (6 steps, guidance ~5): usable for quick previews but visibly noisier and less well-formed than quality runs; not recommended for final output.
 - **`runwayml/stable-diffusion-v1-5` with `--profile quality`** (25 steps, guidance ~7.5): the production default; the best balance of speed and quality for SD 1.5 on simple subjects.
 
-SD 1.5 remains the default because it is the only checkpoint that produces consistently recognizable simple subjects (letters, numbers, fruit, animals) at 512 x 512 within a reasonable time budget on CPU, and its license permits commercial use in books intended for sale. See the license check in `src/pageloom/license_check.py`.
+SD 1.5 remains the default because it is the only checkpoint that produces consistently recognizable simple subjects (letters, numbers, fruit, animals) at 512 x 512 within a reasonable time budget on CPU, and its license permits commercial use. See the license check in `src/pageloom/license_check.py`.
 
 ## Generalization (milestone 11)
 
