@@ -53,6 +53,7 @@ class Pipeline:
         verify_consistency: bool = True,
         max_cost_usd: float | None = None,
         quality_gate_max_retries: int | None = None,
+        page_size: tuple[float, float] | None = None,
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
@@ -80,7 +81,13 @@ class Pipeline:
         # CLI/provider/model arguments, then the settings default (``local``).
         self.generator = generator or build_image_provider(provider=provider, model=model)
         self.overlay = TextOverlay(style_profile=self.style)
-        self.compiler = compiler or PDFCompiler()
+        # Page size for the compiled PDF: an explicit page_size wins, otherwise
+        # default to the example image's own size (its aspect ratio).
+        if page_size is None:
+            example_width, example_height = self.extractor.image.size
+            page_size = (float(example_width), float(example_height))
+        self.page_size = page_size
+        self.compiler = compiler or PDFCompiler(page_size=self.page_size)
         # Consistency verification runs on every generated page by default
         # (opt out with `verify_consistency=False`). The guard is
         # built from the style/structure already extracted above (no duplicate

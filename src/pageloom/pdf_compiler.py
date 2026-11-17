@@ -9,14 +9,53 @@ from PIL import Image
 from pypdf import PdfWriter
 
 # Default square page size: 8.5 in x 8.5 in at 72 dpi = 612 x 612 pts
-KDP_PAGE_SIZE: tuple[float, float] = (612.0, 612.0)
+DEFAULT_PAGE_SIZE: tuple[float, float] = (612.0, 612.0)
+
+# Preset page sizes in points (1 pt = 1/72 in).
+PAGE_SIZE_PRESETS: dict[str, tuple[float, float]] = {
+    "square": (612.0, 612.0),  # 8.5 in x 8.5 in
+    "a4": (595.28, 841.89),  # 210 mm x 297 mm
+    "letter": (612.0, 792.0),  # 8.5 in x 11 in
+}
+
+
+def parse_page_size(value: str | None) -> tuple[float, float] | None:
+    """Parse a ``--page-size`` value into a (width, height) tuple in points.
+
+    Accepts preset names (square, a4, letter) or a custom ``WIDTHxHEIGHT``
+    string. Returns ``None`` when no size was requested, meaning "use the
+    example image's own size".
+    """
+    if value is None:
+        return None
+    key = value.strip().lower()
+    if key in PAGE_SIZE_PRESETS:
+        return PAGE_SIZE_PRESETS[key]
+    if "x" in key:
+        width_s, height_s = key.split("x", 1)
+        return (float(width_s), float(height_s))
+    raise ValueError(f"Unknown page size {value!r}; use square, a4, letter or WIDTHxHEIGHT")
+
+
+# Deprecated alias kept for one release. Accessing it emits a DeprecationWarning.
+def __getattr__(name: str):
+    if name == "KDP_PAGE_SIZE":
+        import warnings
+
+        warnings.warn(
+            "KDP_PAGE_SIZE is deprecated; use DEFAULT_PAGE_SIZE instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return DEFAULT_PAGE_SIZE
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class PDFCompiler:
-    """Combine illustration pages into a single print-ready KDP PDF."""
+    """Combine illustration pages into a single print-ready PDF."""
 
     def __init__(self, page_size: tuple[float, float] | None = None) -> None:
-        self.page_size = page_size or KDP_PAGE_SIZE
+        self.page_size = page_size or DEFAULT_PAGE_SIZE
 
     def compile(
         self,
