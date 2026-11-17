@@ -3,6 +3,8 @@
 from unittest.mock import MagicMock, patch
 from urllib.error import URLError
 
+import pytest
+
 from pageloom import settings
 
 
@@ -175,14 +177,39 @@ def test_get_openrouter_vision_model_env_takes_precedence_over_discovery(monkeyp
     assert settings.get_openrouter_vision_model() == "some/vision-model:free"
 
 
-def test_get_openrouter_vision_model_falls_back_to_free_router_on_discovery_failure(monkeypatch):
-    """If the models endpoint is unreachable or malformed, fall back to
-    ``openrouter/free`` instead of failing the whole run."""
+@pytest.mark.parametrize("failure", ["unreachable", "malformed"])
+def test_get_openrouter_vision_model_falls_back_to_free_router_on_discovery_failure(
+    monkeypatch, failure
+):
+    """If the models endpoint is unreachable or returns malformed data, fall back
+    to ``openrouter/free`` instead of failing the whole run."""
 
-    def _raise(_req, *args, **kwargs):
-        raise URLError("unreachable")
+    class _MalformedResponse:
+        def __enter__(self):
+            return self
 
-    with patch("pageloom.providers.openrouter.urllib.request.urlopen", side_effect=_raise):
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b"{not valid json"
+
+    if failure == "unreachable":
+
+        def _unreachable(_req, *args, **kwargs):
+            raise URLError("unreachable")
+
+        mock = patch(
+            "pageloom.providers.openrouter.urllib.request.urlopen",
+            side_effect=_unreachable,
+        )
+    else:
+        mock = patch(
+            "pageloom.providers.openrouter.urllib.request.urlopen",
+            return_value=_MalformedResponse(),
+        )
+
+    with mock:
         assert settings.get_openrouter_vision_model() == "openrouter/free"
 
 
