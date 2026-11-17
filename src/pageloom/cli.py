@@ -59,7 +59,7 @@ DEFAULT_CONTENTS = [
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="pageloom",
-        description="PageLoom: generate children's book pages from an example image.",
+        description="PageLoom: generate pages matching an example image.",
     )
     subparsers = parser.add_subparsers(dest="command")
 

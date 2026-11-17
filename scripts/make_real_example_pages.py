@@ -16,7 +16,7 @@ genuinely classifiable to look at:
         real_number_page.png     -> numeral + count description + illustration (number_count_matching)
         real_matching_page.png   -> 3 word+picture pairs on one page (multiple_labels / word_image_matching)
 
-Each page is 612x612 (KDP-ish square) children's-book worksheet style with a
+Each page is 612x612 (KDP-ish square) illustration worksheet style with a
 white background, a clear label, and a real SD illustration. The pipeline
 later rounds page dimensions to a multiple of 8 for generation.
 
@@ -46,11 +46,11 @@ OUT_DIR = Path(__file__).resolve().parent.parent / "examples_real"
 # Distinct, real subjects per page type so a vision model has recognizable
 # content to ground its classification on (rather than hallucinating).
 ILLUSTRATION_PROMPTS = {
-    "alphabet": "a ripe yellow banana on a white background, simple children book illustration, cartoon style",
-    "number": "three cute yellow ducklings swimming on a pond, simple children book illustration, cartoon style",
-    "matching_cat": "a cute orange tabby cat looking at the viewer, simple children book illustration, cartoon style",
-    "matching_dog": "a cute golden puppy sitting happy, simple children book illustration, cartoon style",
-    "matching_fish": "a colorful goldfish swimming in a clear bowl, simple children book illustration, cartoon style",
+    "alphabet": "a ripe yellow banana on a white background, simple illustration, cartoon style",
+    "number": "three cute yellow ducklings swimming on a pond, simple illustration, cartoon style",
+    "matching_cat": "a cute orange tabby cat looking at the viewer, simple illustration, cartoon style",
+    "matching_dog": "a cute golden puppy sitting happy, simple illustration, cartoon style",
+    "matching_fish": "a colorful goldfish swimming in a clear bowl, simple illustration, cartoon style",
 }
 MATCHING_LABELS = ["Cat", "Dog", "Fish"]
 

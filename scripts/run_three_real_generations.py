@@ -1,5 +1,5 @@
-"""End-to-end REAL (non-mocked) audit of three genuinely different children's book
-page types, relying entirely on the DEFAULT automatic vision analysis (no
+"""End-to-end REAL (non-mocked) audit of three genuinely different example page
+types, relying entirely on the DEFAULT automatic vision analysis (no
 ``--description``).
 
 For each of three real example page images (in ``examples_real/``):

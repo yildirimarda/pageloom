@@ -468,7 +468,7 @@ class LLMContentGenerator:
     def generate(
         self,
         count: int,
-        theme: str = "children's book alphabet words",
+        theme: str = "illustrated words",
         page_structure: dict | None = None,
     ) -> list[str]:
         """Generate `count` content words/topics via LLM, routed through detected page structure."""
@@ -496,7 +496,7 @@ class LLMContentGenerator:
                 else "items appropriate for this page type"
             )
             prompt_template = (
-                f"Generate exactly {count} new content items for a children's book page. "
+                f"Generate exactly {count} new content items for this page type. "
                 f"The page type is: {content_type_description} "
                 f"(roughly {element_count} illustrated element(s) per page, arranged in a {arrangement} layout). "
                 f"Each item should be a short label/topic in the same style and spirit as these examples "
@@ -505,28 +505,28 @@ class LLMContentGenerator:
             )
         elif content_pattern == "object_name_pair":
             prompt_template = (
-                f"Generate exactly {count} simple children's book object names (single objects like Cat, Dog, Tree). "
+                f"Generate exactly {count} object names (single objects like Cat, Dog, Tree). "
                 f"Each item should be a single object name suitable for a naming page with a photo-realistic illustration and its name label. "
                 f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
                 f"Example format: Cat, Dog, Tree"
             )
         elif content_pattern == "multi_item_scene":
             prompt_template = (
-                f"Generate exactly {count} themed scene descriptions for a children's book page with multiple labeled items "
+                f"Generate exactly {count} themed scene descriptions with multiple labeled items "
                 f"(e.g., {element_count} items arranged in a {arrangement} layout). Each item should describe a group or scene theme. "
                 f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
                 f"Example format: Picnic in the Park, Garden Party, Forest Adventure"
             )
         elif content_pattern == "single_letter_word_illustration":
             prompt_template = (
-                f"Generate exactly {count} simple children's book word or phrase topics about '{theme}'. "
+                f"Generate exactly {count} word or phrase topics about '{theme}'. "
                 f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
                 f"Example format: Apple, Banana, Cherry"
             )
         else:
             # Fallback to generic letter/word style for unknown patterns
             prompt_template = (
-                f"Generate exactly {count} simple children's book word or phrase topics about '{theme}'. "
+                f"Generate exactly {count} word or phrase topics about '{theme}'. "
                 f"Return only a comma-separated list with no numbering, no explanation, and no extra punctuation. "
                 f"Example format: Apple, Banana, Cherry"
             )
