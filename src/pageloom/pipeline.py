@@ -54,6 +54,7 @@ class Pipeline:
         max_cost_usd: float | None = None,
         quality_gate_max_retries: int | None = None,
         page_size: tuple[float, float] | None = None,
+        text_mode: str | None = None,
     ) -> None:
         self.extractor = VisualStyleExtractor(example_image, description=description)
         self.style = self.extractor.extract()
@@ -88,6 +89,12 @@ class Pipeline:
             page_size = (float(example_width), float(example_height))
         self.page_size = page_size
         self.compiler = compiler or PDFCompiler(page_size=self.page_size)
+        # Text rendering mode: "overlay" (Pillow lettering), "native" (the
+        # provider draws the text, verified with the vision model), or "none"
+        # (images only). Defaults to PAGELOOM_TEXT_MODE / "overlay".
+        self.text_mode = text_mode or settings.get_text_mode()
+        if self.text_mode not in ("overlay", "native", "none"):
+            raise ValueError(f"Unknown text mode {self.text_mode!r}; use overlay, native or none")
         # Consistency verification runs on every generated page by default
         # (opt out with `verify_consistency=False`). The guard is
         # built from the style/structure already extracted above (no duplicate
@@ -185,10 +192,14 @@ class Pipeline:
             reasons = quality_gate_reasons(image)
             if not reasons:
                 if self._subject_present(image, content):
-                    return image
-                # The cheap heuristics passed but the vision model denies the
-                # requested subject: treat that as a failure reason and retry.
-                reasons.append("subject not present")
+                    if self.text_mode == "native" and not self._text_visible(image, content):
+                        reasons.append("text not legible")
+                    else:
+                        return image
+                else:
+                    # The cheap heuristics passed but the vision model denies the
+                    # requested subject: treat that as a failure reason and retry.
+                    reasons.append("subject not present")
             last_image = image
             last_reasons = reasons
             if attempt < max_retries:
@@ -215,6 +226,27 @@ class Pipeline:
             return True
         data_url = PageVisionAnalyzer._encode_image(image)
         prompt = f"Is the subject '{content}' present in this image? Answer yes or no."
+        raw = provider.generate_vision_content(
+            prompt=prompt,
+            image_data_url=data_url,
+            max_tokens=8,
+            temperature=0.2,
+        )
+        return raw.strip().lower().startswith("y")
+
+    def _text_visible(self, image: Image.Image, content: str) -> bool:
+        """Ask the vision model whether ``content``'s text is legible in ``image``.
+
+        Returns True (no check applied) when no vision analyser is configured,
+        so offline runs are unaffected.
+        """
+        if self.vision_analyzer is None:
+            return True
+        provider = getattr(self.vision_analyzer, "provider", None)
+        if provider is None or not hasattr(provider, "generate_vision_content"):
+            return True
+        data_url = PageVisionAnalyzer._encode_image(image)
+        prompt = f"Is the text '{content}' clearly legible in this image? Answer yes or no."
         raw = provider.generate_vision_content(
             prompt=prompt,
             image_data_url=data_url,
@@ -327,6 +359,13 @@ class Pipeline:
                         arrangement=structure.get("arrangement"),
                         text_image_relationship="label_per_image",
                     )
+                    if self.text_mode == "native":
+                        # The provider must draw the label itself: instruct it to
+                        # render the text clearly in the sub-image.
+                        sub_prompt = (
+                            f"{sub_prompt} Draw the text {label_content!r} "
+                            f"clearly and legibly in the image."
+                        )
                     # Size each sub-image based on arrangement
                     arrangement = structure.get("arrangement", "centered")
                     if arrangement == "grid":
@@ -409,20 +448,24 @@ class Pipeline:
                             y = (pic_area_h - sub_img.height) // 2
                         composited.paste(sub_img, (x, y))
 
-                # Apply text overlay with all labels on the composited canvas
+                # Apply text overlay with all labels on the composited canvas.
+                # In overlay mode the Pillow layer draws the labels; in native
+                # mode each sub-image prompt already asked the provider to draw
+                # its label; in none mode the page is images only.
                 overlay_text = ", ".join(
                     [labels[i % len(labels)] for i in range(count)] if labels else [content] * count
                 )
                 image = composited
-                overlaid = self.overlay.apply(
-                    image,
-                    text=overlay_text,
-                    page_format=page_format,
-                    text_image_relationship=text_rel,
-                    element_count=count,
-                    arrangement=structure.get("arrangement"),
-                )
-                pages.append(overlaid)
+                if self.text_mode == "overlay":
+                    image = self.overlay.apply(
+                        image,
+                        text=overlay_text,
+                        page_format=page_format,
+                        text_image_relationship=text_rel,
+                        element_count=count,
+                        arrangement=structure.get("arrangement"),
+                    )
+                pages.append(image)
                 continue
 
             # Standard single-image path. When the provider accepts reference
@@ -448,6 +491,10 @@ class Pipeline:
                 text_image_relationship=structure.get("text_image_relationship"),
                 use_reference_style=bool(references),
             )
+            if self.text_mode == "native":
+                # The provider must draw the text itself: instruct it to render
+                # the content clearly in the image.
+                prompt = f"{prompt} Draw the text {content!r} clearly and legibly in the image."
 
             cache_key = f"{content}:{theme}:{page_format}:{int(width)}:{int(height)}:{prompt}"
             cache_filename = hashlib.md5(cache_key.encode("utf-8")).hexdigest() + ".png"
@@ -490,15 +537,19 @@ class Pipeline:
 
             structure = self.page_structure or {}
             text_rel = structure.get("text_image_relationship")
-            overlaid = self.overlay.apply(
-                image,
-                text=content,
-                page_format=page_format,
-                text_image_relationship=text_rel,
-                element_count=structure.get("element_count"),
-                arrangement=structure.get("arrangement"),
-            )
-            pages.append(overlaid)
+            if self.text_mode == "overlay":
+                # Pillow lettering: exact existing behavior.
+                image = self.overlay.apply(
+                    image,
+                    text=content,
+                    page_format=page_format,
+                    text_image_relationship=text_rel,
+                    element_count=structure.get("element_count"),
+                    arrangement=structure.get("arrangement"),
+                )
+            # native: the provider drew the text (legibility verified by the
+            # quality gate above); none: images only, no text at all.
+            pages.append(image)
 
         if self.budget_stopped and self.max_cost_usd is not None:
             print(

@@ -155,6 +155,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Page format.",
     )
     generate_parser.add_argument(
+        "--text-mode",
+        type=str,
+        default=None,
+        choices=["overlay", "native", "none"],
+        help=(
+            "Text rendering mode: 'overlay' keeps the exact Pillow lettering "
+            "(default); 'native' lets the image provider draw the text and "
+            "checks it with the vision model; 'none' produces images only."
+        ),
+    )
+    generate_parser.add_argument(
         "--force",
         action="store_true",
         default=False,
@@ -573,6 +584,10 @@ def main(argv: list[str] | None = None) -> int:
             # ConsistencyGuard so generated pages are re-classified with the same
             # method (vision or heuristic) during the automatic consistency check.
             vision_analyzer=vision_analyzer,
+            # --text-mode selects how text is rendered on each page: Pillow
+            # lettering (overlay), provider-drawn text verified with the vision
+            # model (native), or images only (none).
+            text_mode=args.text_mode,
             # --no-consistency opts out of that check entirely (no guard runs and
             # no `Consistency check:` report). --quick is low quality and is never
             # used for verification, so it also skips the consistency check.
