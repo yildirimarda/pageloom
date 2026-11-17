@@ -12,7 +12,7 @@ from pageloom import settings
 from pageloom.consistency import ConsistencyGuard
 from pageloom.overlay import TextOverlay
 from pageloom.page_structure_classifier import detect_structure
-from pageloom.pdf_compiler import PDFCompiler
+from pageloom.pdf_compiler import PDFCompiler, write_individual_images, write_zip
 from pageloom.providers import ImageProvider, ImageProviderCapabilities, build_image_provider
 from pageloom.providers.size_negotiation import generate_fitting_slot, negotiate_size
 from pageloom.quality_gate import QualityGateError, quality_gate_reasons
@@ -231,8 +231,11 @@ class Pipeline:
         page_format: str = "standard",
         force: bool = False,
         cache_dir: str | Path | None = None,
+        output_format: str = "pdf",
     ) -> Path:
         """Generate matching pages for each content item and compile to PDF."""
+        if output_format not in ("pdf", "png", "jpeg", "zip"):
+            raise ValueError(f"Unknown output format {output_format!r}; use pdf, png, jpeg or zip")
         # Derive page format from detected structure when user hasn't overridden it
         # with a non-default value. The CLI passes explicit formats; the library
         # can infer from the example page structure.
@@ -513,7 +516,11 @@ class Pipeline:
             self._report_consistency()
         else:
             self.consistency_results = []
-        return self.compiler.compile(pages, output_path_obj)
+        if output_format == "pdf":
+            return self.compiler.compile(pages, output_path_obj)
+        if output_format in ("png", "jpeg"):
+            return write_individual_images(pages, output_path_obj, output_format)
+        return write_zip(pages, output_path_obj)
 
     def _verify_page(self, page: Image.Image) -> dict:
         """Run the consistency guard against one generated page.

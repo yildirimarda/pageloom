@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import tempfile
+import zipfile
 from pathlib import Path
 
 from PIL import Image
@@ -107,3 +109,44 @@ class PDFCompiler:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         writer.write(str(output_path))
         return output_path
+
+
+def write_individual_images(
+    pages: list[Image.Image],
+    output_path: str | Path,
+    fmt: str = "png",
+) -> Path:
+    """Write each page as a numbered individual image file.
+
+    Files are named ``{stem}_{index:03d}.{ext}`` next to ``output_path``
+    (e.g. ``out_001.png``). ``jpeg`` writes ``.jpg`` files. Returns the
+    directory the images were written to.
+    """
+    if fmt not in ("png", "jpeg"):
+        raise ValueError(f"Unknown image output format {fmt!r}; use png or jpeg")
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    stem = output_path.stem
+    ext = "jpg" if fmt == "jpeg" else fmt
+    pil_format = "JPEG" if fmt == "jpeg" else "PNG"
+    for index, page in enumerate(pages, start=1):
+        img = page.convert("RGB") if pil_format == "JPEG" else page
+        file_path = output_path.parent / f"{stem}_{index:03d}.{ext}"
+        img.save(str(file_path), pil_format)
+    return output_path.parent
+
+
+def write_zip(pages: list[Image.Image], output_path: str | Path) -> Path:
+    """Write each page as a numbered PNG inside a zip archive.
+
+    Entries are named ``001.png``, ``002.png``, .... Returns the zip path.
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(str(output_path), "w", zipfile.ZIP_DEFLATED) as archive:
+        for index, page in enumerate(pages, start=1):
+            img = page.convert("RGB")
+            buffer = io.BytesIO()
+            img.save(buffer, "PNG")
+            archive.writestr(f"{index:03d}.png", buffer.getvalue())
+    return output_path

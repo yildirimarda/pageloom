@@ -1,7 +1,17 @@
+import io
+import zipfile
+from pathlib import Path
+
 import pytest
 from PIL import Image
 
-from pageloom.pdf_compiler import DEFAULT_PAGE_SIZE, PDFCompiler, parse_page_size
+from pageloom.pdf_compiler import (
+    DEFAULT_PAGE_SIZE,
+    PDFCompiler,
+    parse_page_size,
+    write_individual_images,
+    write_zip,
+)
 
 
 def test_default_page_size_is_square_612():
@@ -126,3 +136,62 @@ def test_parse_page_size_custom_widthxheight():
 def test_parse_page_size_invalid_raises():
     with pytest.raises(ValueError):
         parse_page_size("not-a-size")
+
+
+def _make_pages(tmp_path: Path, count: int = 3) -> list[Image.Image]:
+    return [Image.new("RGB", (100, 100), color=c) for c in ("red", "green", "blue")][:count]
+
+
+def test_write_individual_images_png(tmp_path: Path):
+    output = tmp_path / "out.png"
+    pages = _make_pages(tmp_path)
+    result = write_individual_images(pages, output, fmt="png")
+    assert result == tmp_path
+    for index in range(1, len(pages) + 1):
+        file_path = tmp_path / f"out_{index:03d}.png"
+        assert file_path.exists()
+        with Image.open(file_path) as img:
+            assert img.format == "PNG"
+            assert img.size == (100, 100)
+
+
+def test_write_individual_images_jpeg(tmp_path: Path):
+    output = tmp_path / "out.jpeg"
+    pages = _make_pages(tmp_path)
+    result = write_individual_images(pages, output, fmt="jpeg")
+    assert result == tmp_path
+    for index in range(1, len(pages) + 1):
+        file_path = tmp_path / f"out_{index:03d}.jpg"
+        assert file_path.exists()
+        with Image.open(file_path) as img:
+            assert img.format == "JPEG"
+            assert img.mode == "RGB"
+
+
+def test_write_individual_images_creates_directory(tmp_path: Path):
+    output = tmp_path / "nested" / "out.png"
+    pages = _make_pages(tmp_path, 2)
+    write_individual_images(pages, output, fmt="png")
+    assert (tmp_path / "nested" / "out_001.png").exists()
+    assert (tmp_path / "nested" / "out_002.png").exists()
+
+
+def test_write_individual_images_invalid_format_raises(tmp_path: Path):
+    with pytest.raises(ValueError):
+        write_individual_images(_make_pages(tmp_path, 1), tmp_path / "out.png", fmt="bmp")
+
+
+def test_write_zip(tmp_path: Path):
+    output = tmp_path / "out.zip"
+    pages = _make_pages(tmp_path)
+    result = write_zip(pages, output)
+    assert result == output
+    assert output.exists()
+    with zipfile.ZipFile(str(output)) as archive:
+        names = archive.namelist()
+        assert names == ["001.png", "002.png", "003.png"]
+        for index in range(1, len(pages) + 1):
+            data = archive.read(f"{index:03d}.png")
+            with Image.open(io.BytesIO(data)) as img:
+                assert img.format == "PNG"
+                assert img.mode == "RGB"
