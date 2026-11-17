@@ -135,7 +135,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
 <!-- goal: a general example-to-images tool, no children's book assumptions; why: docs/IMAGE-BACKENDS.md -->
 - [x] Replace the children's book wording in all prompts and docstrings with neutral wording driven by the example's own analysed style and content type, and update the tests that assert the old strings
   - list of the places that still say it: docs/IMAGE-BACKENDS.md
-- [ ] Rename `KDP_PAGE_SIZE` to `DEFAULT_PAGE_SIZE`, keep the old name as a deprecated alias for one release, and add `--page-size` with presets (square, a4, letter) and custom `WIDTHxHEIGHT`, defaulting to the example's own aspect ratio
+- [x] Rename `KDP_PAGE_SIZE` to `DEFAULT_PAGE_SIZE`, keep the old name as a deprecated alias for one release, and add `--page-size` with presets (square, a4, letter) and custom `WIDTHxHEIGHT`, defaulting to the example's own aspect ratio
 - [ ] Add output formats beyond a single PDF: `--output-format pdf|png|jpeg|zip`, writing individual numbered images or a zip when no PDF is wanted, with tests for each format
 - [ ] Add a plain `pageloom images` command that takes prompts or a content file and an optional style reference and writes images without any page, letter or text-overlay logic, so the tool works for any image set and not only for pages
 - [ ] Let users supply the content items without an LLM through `--content-file` (txt, csv or json), validate the file with errors naming the line, and make the built-in alphabet list one optional sample instead of the default for every page type
