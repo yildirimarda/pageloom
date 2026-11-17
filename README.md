@@ -2,7 +2,7 @@
 
 PageLoom is a Python pipeline that generates a set of images from one example. It takes an example image — for instance a page with a letter and a matching illustration — and analyzes its visual style, layout, and content pattern, then generates matching images for the rest of the set while preserving illustration style, color palette, typography, and composition. Images are generated locally via Stable Diffusion using the Hugging Face diffusers library, text is overlaid with Pillow, and the results are compiled into a single PDF. The codebase is fully portable: it runs identically inside a Docker container (CPU or CUDA) and on a local macOS machine via plain Python or uv using Apple's MPS backend, with no behavioral differences beyond generation speed.
 
-The pipeline itself (analyze an example, generate matching outputs, compose them) is not tied to one kind of content. Some defaults still come from the project's origin as an illustrated-page generator: the built-in prompts are written for illustrated pages and the default page size is a 612 x 612 pt square. These are being generalized, and the page size is already configurable (`PDFCompiler(page_size=...)`).
+The pipeline itself (analyze an example, generate matching outputs, compose them) is not tied to one kind of content — it works for any page type (letters, numbers, word-image matching grids, counting pages, or anything else) detected automatically from the example image, with no children's-book assumptions. Page size defaults to the example image's own aspect ratio and is configurable via `--page-size` (presets `square`, `a4`, `letter`, or custom `WIDTHxHEIGHT`); output can be a single PDF or numbered PNG/JPEG images or a zip (`--output-format`). Text rendering is optional (`--text-mode overlay|native|none`).
 
 ## Installation
 
@@ -77,6 +77,12 @@ Environment variables you can set:
 - `PAGELOOM_DEVICE` — override the auto-detected device (`cpu`, `cuda`, `mps`).
 - `PAGELOOM_OUTPUT_DIR` — default output directory for generated PDFs.
 - `CUDA_VISIBLE_DEVICES` — restrict CUDA devices in Docker
+- `PAGELOOM_TEXT_MODE` — text rendering mode: `overlay`, `native`, or `none` (default: `overlay`)
+- `PAGELOOM_PROFILE` — generation profile: `fast` (6 steps, rough previews) or `quality` (25-30 steps, production defaults)
+- `PAGELOOM_CPU_SLOW_WARN_SECONDS` — seconds above which a CPU-based run warns the user (default: 300; set `0` to disable)
+- `PAGELOOM_QUALITY_GATE_MAX_RETRIES` — max quality-gate retries with a fresh seed before rejecting a frame (default: 2)
+- `PAGELOOM_IMAGE_STRENGTH` — image-to-image strength for conditioning local generation on the example page (`0.0` off, `(0, 1]` on)
+- `PAGELOOM_SD_STEPS` / `PAGELOOM_SD_GUIDANCE_SCALE` — Stable Diffusion inference steps and guidance scale (production defaults: 25 steps, ~7 guidance)
 
 ## LLM Provider Configuration
 
@@ -102,15 +108,27 @@ If the selected provider's API key is missing at startup, `LLMContentGenerator` 
 
 The CLI wrapper (`pageloom generate --pages N`) supports:
 
-- `--use-llm` — enable LLM-based content generation when `--pages` exceeds the available built-in list.
-- `--llm-provider {openai,anthropic,openrouter}` — override the provider selected by `PAGELOOM_LLM_PROVIDER`.
-- `--image-provider {local}` — override the image-generation provider selected by `PAGELOOM_IMAGE_PROVIDER` (default: `local`).
+- `--pages N` — number of pages to generate (required).
+- `--example PATH` — path to the example page image (default: `example.png`).
+- `--use-llm` — enable LLM-based content generation when `--pages` exceeds the available built-in content list for the detected structure.
+- `--llm-provider {openai,anthropic,openrouter}` — override the provider selected by `PAGELOOM_LLM_PROVIDER` (default: `openai`).
+- `--image-provider {local,openai,gemini,openrouter,flux}` — override the image-generation provider selected by `PAGELOOM_IMAGE_PROVIDER` (default: `local`).
 - `--image-model` — override the image model id selected by `PAGELOOM_IMAGE_MODEL` (default: the provider's own default model).
-- `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). This is passed straight through to structure detection and `Pipeline`. Providing it is treated as an explicit override that **skips automatic vision analysis** (see below) — useful if you already know the page type and want to avoid the network call.
+- `--description` — optional free-text description of the example page (e.g. `"object name pair"` or `"alphabet letter word"`). Passed to structure detection and `Pipeline`. Providing it is treated as an explicit override that **skips automatic vision analysis** (see below) — useful if you already know the page type and want to avoid the network call.
 - `--no-vision` — disable automatic vision-based page-structure analysis (see next section) and fall back to the image-size heuristic instead.
 - `--vision-provider {openai,anthropic,openrouter}` — provider used for automatic vision analysis (default: `openrouter`, free tier).
 - `--no-consistency` — skip the automatic per-page consistency check (see "Consistency Checking" below): no guard runs and no `Consistency check: N/M` summary is printed. Use this to avoid the extra vision API call per page that a first-run check costs (mirrors `--no-vision`, for the same rate-cap concern on the free tier).
 - `--quick` — low-quality quick mode: generates with only a few inference steps (e.g. 6) for fast, rough previews. **Clearly low quality — never used for verification or consistency checks** (it implies `--no-consistency`). Real runs use the production defaults: 25-30 inference steps, the DPM++ multistep scheduler, float16 on CUDA/MPS, and guidance around 7.
+- `--profile {fast,quality}` — generation profile: `fast` uses fewer steps for rough previews; `quality` uses the production defaults (25-30 steps, guidance ~7). Defaults to `quality` (overridable with `PAGELOOM_PROFILE`).
+- `--text-mode {overlay,native,none}` — text rendering mode: `overlay` keeps the exact Pillow lettering (default); `native` lets the image provider draw the text and checks it with the vision model; `none` produces images only.
+- `--content-file FILE` — supply content items from a txt/csv/json file instead of the built-in alphabet sample or the LLM; file errors name the offending line.
+- `--format {standard,object_name,themed_scene}` — page format. Defaults to `standard`; when not overridden it is derived from the detected page structure (`object_name` for `object_name_pair`, `themed_scene` for `multi_item_scene`).
+- `--page-size SIZE` — page size for the output PDF. Presets: `square`, `a4`, `letter`. Custom: `WIDTHxHEIGHT` in points (e.g. `612x792`). Defaults to the example image's own size/aspect ratio.
+- `--output-format {pdf,png,jpeg,zip}` — output format: `pdf` compiles pages into a single PDF (default); `png`/`jpeg` write individual numbered images; `zip` bundles them into a zip archive at `--output`.
+- `--output PATH` — output path (PDF by default; the stem is reused for numbered images/zip).
+- `--force` — regenerate raw illustrations even if cached.
+- `--max-cost USD` — maximum estimated total cost in USD; generation stops before this budget is exceeded (cached images are free).
+- `--estimate` — print the expected cost for the run without calling any image provider, then exit.
 
 Example:
 
@@ -235,13 +253,15 @@ The `content_pattern` here is not restricted to the three legacy values below �
 
 ## Supported Page Structures
 
-`PageStructureClassifier` determines the structural content pattern of an example page using image-size heuristics and description keywords — this is the fallback path used when vision analysis is disabled or unavailable. Three structures are supported by this heuristic path:
+By default PageLoom uses automatic vision analysis to detect the example page's structure — see "Automatic Visual Page-Structure Analysis" above. That path is open-ended: `content_pattern` is not limited to a fixed list, so any page type (letters, numbers, digits, word-image matching grids, counting pages, shapes, colors, or anything else) is recognized without a hand-written description, plus structural attributes (`element_count`, `arrangement`, `text_image_relationship`) and a `content_type_description` that drives content generation for that exact page type.
+
+When vision analysis is disabled (`--no-vision`) or unavailable, `PageStructureClassifier` falls back to image-size heuristics and description keywords. Three structures are supported by this heuristic path:
 
 - `single_letter_word_illustration` — a single letter/word with an illustration (default for standard alphabet-style pages). Content is routed through a single-item centered layout (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
 - `object_name_pair` — a photo-realistic object with its name label (`element_count: 1`, `arrangement: centered`, `text_image_relationship: label_per_image`).
 - `multi_item_scene` — a themed scene with multiple labeled items, such as a grid or puzzle (`element_count` inferred from image width, `arrangement: grid`, `text_image_relationship: label_per_image`).
 
-When vision analysis is used instead (the default), `content_pattern` is open-ended and not limited to these three values — see the section above.
+Vision-derived pages can additionally report `text_image_relationship` of `multiple_labels` (several picture+word pairs on one page, e.g. a word-image matching grid) or `no_text` (images only). `TextOverlay` honors these: `multiple_labels` splits the content by commas and places each label in a dedicated bottom text band; `no_text` suppresses text entirely.
 
 The detected structure is passed to `LLMContentGenerator.generate()` via the `page_structure` parameter so generated content matches the page type (e.g., object names for `object_name_pair`, scene descriptions for `multi_item_scene`, or whatever `content_type_description` says for a vision-derived pattern). Additionally, `Pipeline.run()` derives the default `page_format` (`object_name` or `themed_scene`) from the detected structure when `page_format="standard"` is not explicitly overridden (other/vision-derived patterns keep the generic `standard` format).
 
@@ -331,11 +351,16 @@ After running the pipeline, the output directory should contain:
 
 ```
 outputs/
-  output.pdf          # compiled PDF (612 x 612 pts by default, 72 dpi)
-  # Intermediate files are cleaned up automatically by PDFCompiler
+  output.pdf          # compiled PDF (default page size; 612 x 612 pts for the `square` preset)
+  # Intermediate per-page PDFs are cleaned up automatically by PDFCompiler
 ```
 
-The PDF compiler (`PDFCompiler`) creates temporary `.pdf` files per page and removes them after writing the final output, keeping the workspace clean. The default page size is a 612 x 612 point square (8.5 in x 8.5 in at 72 dpi); pass `page_size=(width, height)` in points to `PDFCompiler` for another size.
+Output format is controlled by `--output-format`:
+- `pdf` (default) — pages compiled into a single PDF at `--output`.
+- `png` / `jpeg` — individual numbered images written next to `--output` as `{stem}_{index:03d}.{ext}` (e.g. `out_001.png`).
+- `zip` — the numbered images bundled into a zip archive at `--output`.
+
+Page size defaults to the example image's own width and height (its aspect ratio). Override with `--page-size`, which accepts the presets `square` (612 x 612 pts), `a4`, `letter`, or a custom `WIDTHxHEIGHT` in points (e.g. `612x792`). In Python, pass `page_size=(width, height)` to `PDFCompiler`; `DEFAULT_PAGE_SIZE` (612 x 612 pts) is the `square` preset, and `KDP_PAGE_SIZE` is kept as a deprecated alias for one release.
 
 ## Troubleshooting Notes
 

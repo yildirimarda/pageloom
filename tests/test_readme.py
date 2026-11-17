@@ -164,3 +164,68 @@ def test_readme_documents_choosing_an_image_model():
     assert "openrouter.ai/models" in content
     assert "huggingface.co/models" in content
     assert "list_openrouter_image_models" in content
+
+
+def test_readme_documents_generalized_output_configuration():
+    """The README must document the generalized output formats, page-size
+    defaults, text modes, and configuration flags that landed with Milestone 11."""
+    readme_path = __import__("pathlib").Path(__file__).parent.parent / "README.md"
+    content = readme_path.read_text()
+
+    # Output formats beyond a single PDF.
+    assert "--output-format" in content
+    for fmt in ("pdf", "png", "jpeg", "zip"):
+        assert fmt in content
+    assert "{stem}_{index:03d}" in content or "out_001.png" in content
+
+    # Page size defaults to the example's own aspect ratio; --page-size presets.
+    assert "--page-size" in content
+    assert "square" in content and "a4" in content and "letter" in content
+    assert "WIDTHxHEIGHT" in content
+    assert "DEFAULT_PAGE_SIZE" in content
+    assert "KDP_PAGE_SIZE" in content  # deprecated alias kept for one release
+    assert "example image's own" in content or "example's own" in content
+
+    # Text rendering modes.
+    assert "--text-mode" in content
+    for mode in ("overlay", "native", "none"):
+        assert mode in content
+
+    # Content file (no-LLM content source).
+    assert "--content-file" in content
+    assert "txt/csv/json" in content
+
+    # Page format derived from detected structure.
+    assert "--format" in content
+    for page_format in ("standard", "object_name", "themed_scene"):
+        assert page_format in content
+
+    # Generation profile and cost controls.
+    assert "--profile" in content
+    assert "fast" in content and "quality" in content
+    assert "--max-cost" in content
+    assert "--estimate" in content
+
+    # Generalized environment variables.
+    for env_var in (
+        "PAGELOOM_TEXT_MODE",
+        "PAGELOOM_PROFILE",
+        "PAGELOOM_CPU_SLOW_WARN_SECONDS",
+        "PAGELOOM_QUALITY_GATE_MAX_RETRIES",
+        "PAGELOOM_IMAGE_STRENGTH",
+        "PAGELOOM_SD_STEPS",
+        "PAGELOOM_SD_GUIDANCE_SCALE",
+    ):
+        assert env_var in content
+
+    # All image providers are selectable (not just ``local``).
+    for provider in ("local", "openai", "gemini", "openrouter", "flux"):
+        assert provider in content
+
+    # Vision-derived structural relationships beyond the three heuristic buckets.
+    assert "multiple_labels" in content
+    assert "no_text" in content
+
+    # Generalization language: no children's-book assumptions, any page type.
+    assert "no children's-book assumptions" in content or "no children" in content.lower()
+    assert "any page type" in content.lower() or "any page" in content.lower()
