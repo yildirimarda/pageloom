@@ -140,7 +140,7 @@ Bug (reproduced, still unfixed as of the 2026-10 audit): `Pipeline.run()` (`src/
 - [x] Add a plain `pageloom images` command that takes prompts or a content file and an optional style reference and writes images without any page, letter or text-overlay logic, so the tool works for any image set and not only for pages
 - [x] Let users supply the content items without an LLM through `--content-file` (txt, csv or json), validate the file with errors naming the line, and make the built-in alphabet list one optional sample instead of the default for every page type
 - [x] Make text rendering optional per run: `--text-mode overlay|native|none`, overlay keeping the exact Pillow lettering, native letting the provider draw the text and checking it with the vision model, none producing images only
-- [ ] Make the license check provider aware: the local model's licence as today, a note that online providers are governed by their terms of service and output-ownership rules, and a neutral default context instead of "book intended for sale"
+- [x] Make the license check provider aware: the local model's licence as today, a note that online providers are governed by their terms of service and output-ownership rules, and a neutral default context instead of "book intended for sale"
 - [ ] Update the README sections on supported structures, outputs and configuration to match the generalized tool once the items above land
 
 ## Discovered

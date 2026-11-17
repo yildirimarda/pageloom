@@ -198,7 +198,7 @@ def test_illustration_generator_init_license_check_raises_for_unknown_model():
         assert False, "Expected LicenseVerificationError"
     except LicenseVerificationError as exc:
         assert "Unknown model" in str(exc)
-        assert "book intended for sale" in str(exc)
+        assert "commercial use" in str(exc)
 
 
 def test_illustration_generator_init_skips_license_check():

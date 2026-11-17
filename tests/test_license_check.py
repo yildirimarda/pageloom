@@ -4,6 +4,7 @@ import pytest
 
 from pageloom.license_check import (
     COMMERCIAL_USE_MODELS,
+    DEFAULT_CONTEXT,
     LicenseVerificationError,
     LicenseVerifier,
     verify_model_for_commercial_use,
@@ -50,3 +51,41 @@ def test_known_models_dict_contains_openrail_m():
     for info in COMMERCIAL_USE_MODELS.values():
         assert info.get("license") is not None
         assert info.get("license_url") is not None
+
+
+def test_default_context_is_neutral():
+    verifier = LicenseVerifier("runwayml/stable-diffusion-v1-5")
+    result = verifier.verify(intended_use="commercial")
+    assert result["context"] == DEFAULT_CONTEXT
+    assert result["context"] != "book intended for sale"
+
+
+def test_local_provider_checks_model_license_as_today():
+    verifier = LicenseVerifier("runwayml/stable-diffusion-v1-5", provider="local")
+    result = verifier.verify(intended_use="commercial")
+    assert result["verified"] is True
+    assert result["provider"] == "local"
+    assert "CreativeML OpenRAIL-M" in result["license"]
+
+
+def test_online_provider_returns_tos_note_and_does_not_raise():
+    # Even an unknown model id is not blocked for an online provider.
+    verifier = LicenseVerifier("unknown/model-id-123", provider="openai")
+    result = verifier.verify(intended_use="commercial")
+    assert result["verified"] is True
+    assert result["provider"] == "openai"
+    assert result["license"] is None
+    assert result["commercial_use_permitted"] is None
+    assert "terms of service" in result["notes"]
+    assert "output-ownership" in result["notes"]
+
+
+def test_online_provider_known_model_still_governed_by_tos():
+    # A known commercial model id does not trigger the local license check
+    # when the provider is online.
+    verifier = LicenseVerifier("runwayml/stable-diffusion-v1-5", provider="gemini")
+    result = verifier.verify(intended_use="commercial")
+    assert result["verified"] is True
+    assert result["provider"] == "gemini"
+    assert result["license"] is None
+    assert "terms of service" in result["notes"]

@@ -20,6 +20,9 @@ build/
 .pageloom_vision/
 .pageloom_raw/
 
+# generated run outputs (not for commit)
+output_*.png
+
 # crash dumps (seen from the torch/libcusparseLt segfault loop)
 core
 core.*
